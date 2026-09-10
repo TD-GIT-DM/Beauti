@@ -1,6 +1,5 @@
 import initSql from "../migrations/0001_init.sql?raw";
 import seedSql from "../migrations/0002_seed.sql?raw";
-import expandSql from "../migrations/0004_expand_catalog.sql?raw";
 import lipstickImagesSql from "../migrations/0005_lipstick_images.sql?raw";
 
 /** D1 treats `?` as bind placeholders even inside db.exec strings. */
@@ -31,16 +30,14 @@ export async function ensureCatalog(db: D1Database): Promise<void> {
     await db.exec(executableSql(seedSql));
   }
 
-  const expanded = await db.prepare("SELECT id FROM products WHERE id = ?").bind("mac-ruby-woo").first();
-  if (!expanded) {
-    await db.exec(executableSql(expandSql));
-  }
+  // Large expand migration is applied via remote D1 migrate / ops tooling.
+  // Do not db.exec the full 0004 file here — it exceeds reliable D1 exec limits and 500s the API.
 
   const ruby = await db
     .prepare("SELECT image_url FROM products WHERE id = ?")
     .bind("mac-ruby-woo")
     .first<{ image_url: string }>();
-  if (ruby?.image_url.includes("1522337660859")) {
+  if (ruby?.image_url?.includes("1522337660859")) {
     await db.exec(executableSql(lipstickImagesSql));
   }
 }
