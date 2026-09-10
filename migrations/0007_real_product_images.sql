@@ -86,7 +86,7 @@ UPDATE products SET product_url = 'https://www.sephora.com/search/charlotte-tilb
 UPDATE products SET product_url = 'https://www.sephora.com/search/chlo-nomade-eau-de-parfum', updated_at = datetime('now') WHERE id = 'chloe-nomade';
 UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/0622/7797/6235/files/template-product4-piecebundle_1.jpg', product_url = 'https://www.cirquecolors.com/products/jelly-heart-nail-art-set', updated_at = datetime('now') WHERE id = 'cirque-jelly';
 UPDATE products SET product_url = 'https://www.cirquecolors.com/products/au-revoir-nail-polish-remover', updated_at = datetime('now') WHERE id = 'cirque-midnight';
-UPDATE products SET product_url = 'https://fentybeauty.com/products/fenty-skin-cleansing-cuffs', updated_at = datetime('now') WHERE id = 'clean-reserve-skin';
+UPDATE products SET product_url = 'https://www.sephora.com/search/clean-reserve-skin-eau-de-parfum', updated_at = datetime('now') WHERE id = 'clean-reserve-skin';
 UPDATE products SET image_url = 'https://images.ulta.com/is/image/Ulta/2517128', product_url = 'https://www.sephora.com/search/clinique-almost-lipstick-black-honey', updated_at = datetime('now') WHERE id = 'clinique-black-honey';
 
 UPDATE products SET product_url = 'https://www.sephora.com/search/coach-floral-eau-de-parfum', updated_at = datetime('now') WHERE id = 'coach-floral-edp';
@@ -253,7 +253,7 @@ UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/0131/5409/106
 UPDATE products SET product_url = 'https://kyliecosmetics.com/products/king-kylie-matte-lip-kit', updated_at = datetime('now') WHERE id = 'kylie-matte-candy-k';
 UPDATE products SET product_url = 'https://kyliecosmetics.com/products/king-kylie-matte-lip-kit', updated_at = datetime('now') WHERE id = 'kylie-matte-mary-jo-k';
 
-UPDATE products SET product_url = 'https://www.cirquecolors.com/products/creme-de-la-creme-2026', updated_at = datetime('now') WHERE id = 'la-mer-cream';
+UPDATE products SET product_url = 'https://www.cremedelamer.com/product/17766/80880/moisturizers/creme-de-la-mer', updated_at = datetime('now') WHERE id = 'la-mer-cream';
 UPDATE products SET product_url = 'https://www.sephora.com/search/lanc-me-id-le-eau-de-parfum', updated_at = datetime('now') WHERE id = 'lancome-idole';
 UPDATE products SET image_url = 'https://upload.wikimedia.org/wikipedia/commons/d/de/La_vie_est_belle.jpg', product_url = 'https://www.sephora.com/search/lanc-me-la-vie-est-belle-eau-de-parfum', updated_at = datetime('now') WHERE id = 'lancome-la-vie-est-belle';
 UPDATE products SET product_url = 'https://www.sephora.com/search/lanc-me-lash-id-le-mascara', updated_at = datetime('now') WHERE id = 'lancome-lash-idole';
@@ -266,21 +266,21 @@ UPDATE products SET product_url = 'https://www.sephora.com/search/lattafa-asad-e
 UPDATE products SET product_url = 'https://www.sephora.com/search/lattafa-khamrah-eau-de-parfum', updated_at = datetime('now') WHERE id = 'lattafa-khamrah';
 UPDATE products SET product_url = 'https://www.sephora.com/search/lattafa-yara-eau-de-parfum', updated_at = datetime('now') WHERE id = 'lattafa-yara';
 UPDATE products SET product_url = 'https://www.sephora.com/search/laura-mercier-translucent-loose-setting-powder', updated_at = datetime('now') WHERE id = 'laura-mercier-translucent';
-UPDATE products SET product_url = 'https://elfcosmetics.com/products/soft-glam-satin-concealer-13-fair-neutral', updated_at = datetime('now') WHERE id = 'le-labo-another-13';
-UPDATE products SET product_url = 'https://elfcosmetics.com/products/soft-glam-satin-concealer-22-light-warm', updated_at = datetime('now') WHERE id = 'le-labo-bergamote-22';
-UPDATE products SET product_url = 'https://www.kayali.com/products/vacay-in-a-bottle-discovery-set', updated_at = datetime('now') WHERE id = 'le-labo-discovery-set';
-UPDATE products SET product_url = 'https://www.kayali.com/products/fleur-majesty-rose-royale-31', updated_at = datetime('now') WHERE id = 'le-labo-rose-31';
-UPDATE products SET product_url = 'https://www.diptyqueparis.com/products/santal-recharge-pour-bougie-modele-classique-rsa3', updated_at = datetime('now') WHERE id = 'le-labo-santal-33';
-UPDATE products SET product_url = 'https://www.diptyqueparis.com/products/santal-recharge-pour-bougie-modele-classique-rsa3', updated_at = datetime('now') WHERE id = 'le-labo-santal-travel';
-UPDATE products SET product_url = 'https://www.diptyqueparis.com/products/bougie-modele-classique-sesame-noir-sesam190', updated_at = datetime('now') WHERE id = 'le-labo-the-noir-29';
+UPDATE products SET product_url = 'https://www.sephora.com/search/le-labo-another-13-eau-de-parfum', updated_at = datetime('now') WHERE id = 'le-labo-another-13';
+UPDATE products SET product_url = 'https://www.sephora.com/search/le-labo-bergamote-22-eau-de-parfum', updated_at = datetime('now') WHERE id = 'le-labo-bergamote-22';
+UPDATE products SET product_url = 'https://www.sephora.com/search/le-labo-le-labo-discovery-set', updated_at = datetime('now') WHERE id = 'le-labo-discovery-set';
+UPDATE products SET product_url = 'https://www.sephora.com/search/le-labo-rose-31-eau-de-parfum', updated_at = datetime('now') WHERE id = 'le-labo-rose-31';
+UPDATE products SET product_url = 'https://www.lelabofragrances.com/santal-33-155.html', updated_at = datetime('now') WHERE id = 'le-labo-santal-33';
+UPDATE products SET product_url = 'https://www.sephora.com/search/le-labo-santal-33-travel-tube', updated_at = datetime('now') WHERE id = 'le-labo-santal-travel';
+UPDATE products SET product_url = 'https://www.sephora.com/search/le-labo-the-noir-29-eau-de-parfum', updated_at = datetime('now') WHERE id = 'le-labo-the-noir-29';
 UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/2652/6978/files/VELVET_RIBBON_ALLURE_4X5_6042c742-2bbb-4773-94f2-a7d3827d7a64.jpg', product_url = 'https://www.lisaeldridge.com/products/velvet-ribbon-true-velvet-lipstick-colour', updated_at = datetime('now') WHERE id = 'lisa-eldridge-velvet-ribbon';
 UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/0732/2039/1164/files/Cameo_PDP_1_2x_deb8ece8-9171-4292-b1cc-9424f2a3c633.png', product_url = 'https://www.livingproof.com/products/perfect-hair-day™-frosted-fig-advanced-clean-dry-shampoo', updated_at = datetime('now') WHERE id = 'living-proof-dry';
-UPDATE products SET product_url = 'https://www.rarebeauty.com/products/true-to-myself-natural-matte-longwear-foundation', updated_at = datetime('now') WHERE id = 'loreal-true-match-c1';
-UPDATE products SET product_url = 'https://www.rarebeauty.com/products/true-to-myself-natural-matte-longwear-foundation', updated_at = datetime('now') WHERE id = 'loreal-true-match-n8';
-UPDATE products SET product_url = 'https://www.rarebeauty.com/products/true-to-myself-natural-matte-longwear-foundation', updated_at = datetime('now') WHERE id = 'loreal-true-match-w3';
+UPDATE products SET product_url = 'https://www.sephora.com/search/l-oreal-true-match-foundation-c1', updated_at = datetime('now') WHERE id = 'loreal-true-match-c1';
+UPDATE products SET product_url = 'https://www.sephora.com/search/l-oreal-true-match-foundation-n8', updated_at = datetime('now') WHERE id = 'loreal-true-match-n8';
+UPDATE products SET product_url = 'https://www.sephora.com/search/l-oreal-true-match-foundation-w3', updated_at = datetime('now') WHERE id = 'loreal-true-match-w3';
 UPDATE products SET product_url = 'https://www.sephora.com/search/la-roche-posay-hyalu-b5-serum', updated_at = datetime('now') WHERE id = 'lrp-hyalu-b5';
-UPDATE products SET product_url = 'https://elfcosmetics.com/products/bright-icon-vitamin-c-e-ferulic-serum-regular', updated_at = datetime('now') WHERE id = 'lrp-pure-vitamin-c10';
-UPDATE products SET product_url = 'https://glowrecipe.com/products/blackberry-retinol-blemish-serum-sachet', updated_at = datetime('now') WHERE id = 'lrp-retinol-b3';
+UPDATE products SET product_url = 'https://www.sephora.com/search/la-roche-posay-pure-vitamin-c10-serum', updated_at = datetime('now') WHERE id = 'lrp-pure-vitamin-c10';
+UPDATE products SET product_url = 'https://www.sephora.com/search/la-roche-posay-retinol-b3-serum', updated_at = datetime('now') WHERE id = 'lrp-retinol-b3';
 UPDATE products SET product_url = 'https://www.sephora.com/search/mac-antique-velvet-lipstick', updated_at = datetime('now') WHERE id = 'mac-antique-velvet';
 UPDATE products SET product_url = 'https://www.sephora.com/search/mac-lip-pencil-cherry', updated_at = datetime('now') WHERE id = 'mac-cherry-liner';
 UPDATE products SET product_url = 'https://www.sephora.com/search/mac-chili-lipstick', updated_at = datetime('now') WHERE id = 'mac-chili';
@@ -309,9 +309,9 @@ UPDATE products SET product_url = 'https://www.sephora.com/search/mac-twig-lipst
 UPDATE products SET product_url = 'https://www.sephora.com/search/mac-velvet-teddy-lipstick', updated_at = datetime('now') WHERE id = 'mac-velvet-teddy';
 UPDATE products SET image_url = 'https://sdcdn.io/mac/us/mac_sku_M2LP08_1x1_0.png', product_url = 'https://www.sephora.com/search/mac-whirl-lipstick', updated_at = datetime('now') WHERE id = 'mac-whirl';
 UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/1919/1971/files/gm_no_badge.jpg', product_url = 'https://maelove.com/products/glow-maker-vitamin-c-serum', updated_at = datetime('now') WHERE id = 'maelove-glow-maker';
-UPDATE products SET product_url = 'https://makeupbymario.com/products/marios-lip-lift-kit', updated_at = datetime('now') WHERE id = 'make-up-for-ever-aqua-nude';
+UPDATE products SET product_url = 'https://www.sephora.com/search/make-up-for-ever-aqua-lip-nude', updated_at = datetime('now') WHERE id = 'make-up-for-ever-aqua-nude';
 UPDATE products SET product_url = 'https://www.sephora.com/search/make-up-for-ever-aqua-lip-coral', updated_at = datetime('now') WHERE id = 'make-up-for-ever-aqua-orange';
-UPDATE products SET product_url = 'https://www.realtechniques.com/products/foundation-makeup-blender', updated_at = datetime('now') WHERE id = 'makeup-forever-hd-y225';
+UPDATE products SET product_url = 'https://www.sephora.com/search/make-up-for-ever-hd-skin-foundation-y225', updated_at = datetime('now') WHERE id = 'makeup-forever-hd-y225';
 UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/0275/4822/1505/products/sku_22014060_color_lucia-berry-mauve_01.jpg', product_url = 'https://makeupbymario.com/products/ultra-suede-lipstick', updated_at = datetime('now') WHERE id = 'makeup-mario-ultra-suede-berry';
 UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/0275/4822/1505/products/MBM_UltraSuede_Lipstick_sierra-soft-peachy-nude-pink_Uncapped_Ecom_COMP_Final_2_0016ff90-287d-46a2-bf0b-2f620a63ee72.jpg', product_url = 'https://makeupbymario.com/products/ultra-suede-lipstick', updated_at = datetime('now') WHERE id = 'makeup-mario-ultra-suede-nude';
 UPDATE products SET product_url = 'https://www.sephora.com/search/marc-jacobs-daisy-eau-de-toilette', updated_at = datetime('now') WHERE id = 'marc-jacobs-daisy';
@@ -414,26 +414,26 @@ UPDATE products SET product_url = 'https://www.sephora.com/search/opi-lincoln-pa
 UPDATE products SET product_url = 'https://www.sephora.com/search/opi-malaga-wine-nail-lacquer', updated_at = datetime('now') WHERE id = 'opi-malaga-wine';
 UPDATE products SET product_url = 'https://www.sephora.com/search/opi-mod-about-you-nail-lacquer', updated_at = datetime('now') WHERE id = 'opi-mod-about-you';
 UPDATE products SET product_url = 'https://www.sephora.com/search/opi-is-something-bothering-you-nail-lacquer', updated_at = datetime('now') WHERE id = 'opi-silver-on-ice';
-UPDATE products SET product_url = 'https://www.cosrx.com/products/the-alpha-arbutin-2-discoloration-care-serum-번들', updated_at = datetime('now') WHERE id = 'ordinary-alpha-arbutin';
+UPDATE products SET product_url = 'https://www.sephora.com/search/the-ordinary-alpha-arbutin-2-ha', updated_at = datetime('now') WHERE id = 'ordinary-alpha-arbutin';
 UPDATE products SET product_url = 'https://www.sephora.com/search/the-ordinary-ascorbyl-glucoside-solution-12', updated_at = datetime('now') WHERE id = 'ordinary-ascorbyl-glucoside';
 
-UPDATE products SET product_url = 'https://naturium.com/products/the-multi-peptide-advanced-body-wash', updated_at = datetime('now') WHERE id = 'ordinary-buffet';
+UPDATE products SET product_url = 'https://www.sephora.com/search/the-ordinary-buffet-multi-peptide-serum', updated_at = datetime('now') WHERE id = 'ordinary-buffet';
 UPDATE products SET product_url = 'https://www.sephora.com/search/the-ordinary-granactive-retinoid-2-emulsion', updated_at = datetime('now') WHERE id = 'ordinary-granactive-retinoid';
-UPDATE products SET product_url = 'https://theinkeylist.com/products/hyaluronic-acid-serum', updated_at = datetime('now') WHERE id = 'ordinary-hyaluronic';
+UPDATE products SET product_url = 'https://www.sephora.com/search/the-ordinary-hyaluronic-acid-2-b5', updated_at = datetime('now') WHERE id = 'ordinary-hyaluronic';
 UPDATE products SET product_url = 'https://www.sephora.com/search/the-ordinary-matrixyl-10-ha', updated_at = datetime('now') WHERE id = 'ordinary-matrixyl';
-UPDATE products SET product_url = 'https://theinkeylist.com/products/niacinamide-serum-duo', updated_at = datetime('now') WHERE id = 'ordinary-niacinamide';
+UPDATE products SET product_url = 'https://theordinary.com/en-us/niacinamide-10-zinc-1-serum-100436.html', updated_at = datetime('now') WHERE id = 'ordinary-niacinamide';
 UPDATE products SET product_url = 'https://www.sephora.com/search/the-ordinary-retinol-0-5-in-squalane', updated_at = datetime('now') WHERE id = 'ordinary-retinol';
 UPDATE products SET product_url = 'https://www.sephora.com/search/the-ordinary-high-adherence-silicone-primer', updated_at = datetime('now') WHERE id = 'ordinary-silicone-primer';
 UPDATE products SET product_url = 'https://www.sephora.com/search/the-ordinary-vitamin-c-suspension-23-ha-spheres', updated_at = datetime('now') WHERE id = 'ordinary-vit-c-suspension';
 UPDATE products SET product_url = 'https://www.sephora.com/search/orly-plastic-valley-nail-lacquer', updated_at = datetime('now') WHERE id = 'orly-plastic-valley';
 UPDATE products SET product_url = 'https://www.sephora.com/search/orly-purple-crush-nail-lacquer', updated_at = datetime('now') WHERE id = 'orly-purple-crush';
 UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/1043/7322/files/Update_3_LIC-SB_Travel_260611-17-55_Site_Asset_PDP_Product_Thumbnail_1440x1780_14.jpg', product_url = 'https://theouai.com/products/leave-in-conditioner-st-barts-scent-travel', updated_at = datetime('now') WHERE id = 'ouai-leave-in';
-UPDATE products SET product_url = 'https://dedcool.com/products/free-dedcool-x-ouai-melrose-place-dryer-sheets', updated_at = datetime('now') WHERE id = 'ouai-melrose-edp';
+UPDATE products SET product_url = 'https://www.sephora.com/search/ouai-melrose-place-eau-de-parfum', updated_at = datetime('now') WHERE id = 'ouai-melrose-edp';
 UPDATE products SET product_url = 'https://www.sephora.com/search/paco-rabanne-1-million-eau-de-toilette', updated_at = datetime('now') WHERE id = 'paco-1-million';
 UPDATE products SET product_url = 'https://www.sephora.com/search/paco-rabanne-invictus-eau-de-toilette', updated_at = datetime('now') WHERE id = 'paco-invictus';
 UPDATE products SET product_url = 'https://www.sephora.com/search/pat-mcgrath-labs-mattetrance-lipstick-elson', updated_at = datetime('now') WHERE id = 'pat-mcgrath-elson';
 UPDATE products SET product_url = 'https://www.sephora.com/search/pat-mcgrath-labs-mattetrance-elson-6', updated_at = datetime('now') WHERE id = 'pat-mcgrath-elson-6';
-UPDATE products SET product_url = 'https://patrickta.com/products/she-left-me-on-red-strawberry-blush-duo', updated_at = datetime('now') WHERE id = 'pat-mcgrath-elson-red';
+UPDATE products SET product_url = 'https://www.sephora.com/search/pat-mcgrath-labs-mattetrance-lipstick-elson-4', updated_at = datetime('now') WHERE id = 'pat-mcgrath-elson-red';
 UPDATE products SET product_url = 'https://www.sephora.com/search/pat-mcgrath-labs-mattetrance-flesh-3', updated_at = datetime('now') WHERE id = 'pat-mcgrath-flesh-3';
 UPDATE products SET product_url = 'https://www.sephora.com/search/pat-mcgrath-labs-mothership-bronze-seduction', updated_at = datetime('now') WHERE id = 'pat-mcgrath-mothership-bronze';
 UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/0099/0602/8608/files/Major-Headlines-Blush-Duo-_-Precision-Brush-Set.jpg', product_url = 'https://patrickta.com/products/major-headlines-blush-duo-precision-brush-set', updated_at = datetime('now') WHERE id = 'patrick-ta-oh-she-glows';
@@ -518,7 +518,7 @@ UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/0417/0026/204
 UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/2826/2250/files/01_SDJ_PPage_DTC_BB_BC_25ML_OVERHEAD_RGB_1452X1452_0ed4f11d-94a3-476f-9858-e91fd6167691.jpg', product_url = 'https://www.soldejaneiro.com/products/25ml-brazilian-bum-bum-cream', updated_at = datetime('now') WHERE id = 'sol-de-janeiro-bum-bum';
 UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/2220/7229/files/A_HGCollabContent16.jpg', product_url = 'https://www.stilacosmetics.com/products/stay-all-day-waterproof-liquid-eye-liner-intense-labradorite', updated_at = datetime('now') WHERE id = 'stila-stay-all-day';
 UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/2220/7229/files/NSE38010001_-_Peacock_OPEN_-_SHADOW.jpg', product_url = 'https://www.stilacosmetics.com/products/stay-all-day-chroma-flash-liquid-eye-liner', updated_at = datetime('now') WHERE id = 'stila-stay-emerald';
-UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/2382/2877/files/Square-Lip-Butter-Balm-Vanilla-Main.jpg', product_url = 'https://elfcosmetics.com/products/luminous-putty-bronzer-summer-fridays', updated_at = datetime('now') WHERE id = 'summer-fridays-butter';
+UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/2382/2877/files/Square-Lip-Butter-Balm-Vanilla-Main.jpg', product_url = 'https://www.sephora.com/product/lip-butter-balm-P45590063', updated_at = datetime('now') WHERE id = 'summer-fridays-butter';
 UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/2382/2877/files/Main_PDP_1-15.jpg', product_url = 'https://www.summerfridays.com/products/cc-me-serum', updated_at = datetime('now') WHERE id = 'summer-fridays-cc-me';
 UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/2382/2877/files/Square-Lip-Butter-Balm-Cherry-Main.jpg', product_url = 'https://www.summerfridays.com/products/lip-butter-balm-cherry', updated_at = datetime('now') WHERE id = 'summer-fridays-cherry';
 UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/2382/2877/files/Cloud-Dew-Main-Square.jpg', product_url = 'https://www.summerfridays.com/products/cloud-dew-gel-cream', updated_at = datetime('now') WHERE id = 'summer-fridays-cloud-dew';
@@ -537,8 +537,8 @@ UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/0949/3328/722
 UPDATE products SET product_url = 'https://www.sephora.com/search/tatcha-the-serum', updated_at = datetime('now') WHERE id = 'tatcha-the-serum';
 UPDATE products SET product_url = 'https://www.sephora.com/search/herm-s-terre-d-herm-s-eau-de-toilette', updated_at = datetime('now') WHERE id = 'terre-dhermes-edt';
 UPDATE products SET product_url = 'https://www.sephora.com/search/tom-ford-lost-cherry-travel-spray', updated_at = datetime('now') WHERE id = 'tf-lost-cherry-travel';
-UPDATE products SET product_url = 'https://www.escentric.com/products/m-guaiac-wood-atom-iserrefill', updated_at = datetime('now') WHERE id = 'tf-oud-wood-travel';
-UPDATE products SET product_url = 'https://oliveandjune.com/products/the-mani-builder-gel-system-6', updated_at = datetime('now') WHERE id = 'the-gelbottle-builder';
+UPDATE products SET product_url = 'https://www.sephora.com/search/tom-ford-oud-wood-travel-spray', updated_at = datetime('now') WHERE id = 'tf-oud-wood-travel';
+UPDATE products SET product_url = 'https://www.sephora.com/search/the-gelbottle-the-gelbottle-builder-gel', updated_at = datetime('now') WHERE id = 'the-gelbottle-builder';
 
 UPDATE products SET image_url = 'https://cdn.shopify.com/s/files/1/0582/2885/files/051723_VolumeMascaraSecondaryWeb_QA_PDP_VolumizerExtensions_1024x1024_a0b1ff03-7337-4246-8c97-1f247a1571c6.jpg', product_url = 'https://thrivecausemetics.com/products/liquid-lash-mascara-duo', updated_at = datetime('now') WHERE id = 'thrive-liquid-lash';
 UPDATE products SET product_url = 'https://www.sephora.com/search/timeless-20-vitamin-c-e-ferulic-serum', updated_at = datetime('now') WHERE id = 'timeless-20-c';

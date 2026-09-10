@@ -214,7 +214,7 @@ INSERT OR IGNORE INTO products (
   'Orgasm Blush',
   'NARS',
   'The golden-pink blush that defined a generation of cheekbones. Peachy, softly shimmering, never frosty.',
-  'https://images.unsplash.com/photo-1610992015732-2449b76344bc'
+  'https://images.unsplash.com/photo-1610992015732-2449b76344bc',
   32.00, 'USD',
   'https://www.narscosmetics.com/USA/orgasm-blush/999NAC0000063.html',
   '["blush","makeup","shimmer","iconic"]',
