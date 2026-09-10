@@ -63,7 +63,13 @@ export function NotificationsPage() {
         <div className="notice-list">
           {notifications.map((item) => (
             <article className={`notice ${item.read ? "" : "unread"}`} key={item.id}>
-              <img src={item.image_url} alt="" />
+              <img
+                src={item.image_url}
+                alt=""
+                onError={(event) => {
+                  event.currentTarget.classList.add("img-broken");
+                }}
+              />
               <div>
                 <h3>
                   <Link to={`/product/${item.product_id}`}>{item.title}</Link>

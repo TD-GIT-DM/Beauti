@@ -91,9 +91,8 @@ api.get("/api/deals", async (c) => {
   const deviceId = deviceIdFrom(c.req.raw);
   const loved = await wishlistedIds(c.env.DB, deviceId);
   const { results } = await c.env.DB.prepare(`SELECT * FROM products`).all<ProductRow>();
-  const products = sortCatalog(await decorateProducts(c.env.DB, results ?? [], loved), "discount_desc")
-    .filter((p) => p.discountPercent > 0)
-    .slice(0, 5);
+  const ranked = sortCatalog(await decorateProducts(c.env.DB, results ?? [], loved), "discount_desc");
+  const products = pickTopDeals(ranked, 5);
   const lastScan = await c.env.DEALS_CACHE.get("deals:last-scan");
   return json(
     {
@@ -247,6 +246,27 @@ function filterCatalog(
   if (opts.maxPrice != null) next = next.filter((p) => p.price <= opts.maxPrice!);
   if (opts.minDiscount != null) next = next.filter((p) => p.discountPercent >= opts.minDiscount!);
   return next;
+}
+
+/** Prefer discounted SKUs with distinct pack shots so the home five never collapse into one photo. */
+export function pickTopDeals(ranked: ProductRecord[], limit = 5): ProductRecord[] {
+  const picked: ProductRecord[] = [];
+  const usedImages = new Set<string>();
+  const take = (pool: ProductRecord[], requireUniqueImage: boolean) => {
+    for (const product of pool) {
+      if (picked.length >= limit) return;
+      if (picked.some((row) => row.id === product.id)) continue;
+      if (requireUniqueImage && product.imageUrl && usedImages.has(product.imageUrl)) continue;
+      picked.push(product);
+      if (product.imageUrl) usedImages.add(product.imageUrl);
+    }
+  };
+  const discounted = ranked.filter((product) => product.discountPercent > 0);
+  take(discounted, true);
+  take(discounted, false);
+  take(ranked, true);
+  take(ranked, false);
+  return picked;
 }
 
 function sortCatalog(products: ProductRecord[], sort: ReturnType<typeof parseSort>, q = ""): ProductRecord[] {

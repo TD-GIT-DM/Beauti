@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { formatDiscount, formatPrice, stockLabel } from "../lib/format";
 import type { Product } from "../types";
@@ -12,6 +13,12 @@ interface Props {
   dealTotal?: number;
 }
 
+function brandMonogram(brand: string): string {
+  const parts = brand.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return brand.slice(0, 2).toUpperCase();
+}
+
 export function ProductCover({
   product,
   wished,
@@ -23,19 +30,29 @@ export function ProductCover({
   const promo = product.promoCodes[0];
   const to = `/product/${product.id}`;
   const discount = product.discountPercent ?? 0;
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [product.id, product.imageUrl]);
+
+  const showPhoto = Boolean(product.imageUrl) && !imageFailed;
 
   return (
-    <article className={`cover ${variant}`}>
-      {product.imageUrl ? (
-        <img
-          src={product.imageUrl}
-          alt=""
-          onError={(e) => {
-            e.currentTarget.style.display = "none";
-          }}
-        />
+    <article className={`cover ${variant}${showPhoto ? "" : " cover-missing-photo"}`}>
+      {showPhoto ? (
+        <img src={product.imageUrl} alt="" onError={() => setImageFailed(true)} />
       ) : null}
-      <div className="cover-fallback" aria-hidden="true" />
+      <div className="cover-fallback" aria-hidden="true">
+        <div className="pack-silhouette">
+          <svg viewBox="0 0 80 120" className="pack-svg">
+            <rect x="22" y="8" width="36" height="10" rx="2" />
+            <rect x="28" y="18" width="24" height="8" rx="1" />
+            <path d="M16 32h48l6 80H10z" />
+          </svg>
+          <span className="pack-monogram">{brandMonogram(product.brand)}</span>
+        </div>
+      </div>
       <div className="cover-scrim" />
       <div className="cover-actions">
         <HeartButton wished={wished} name={product.name} onToggle={() => onToggle(product.id)} />
