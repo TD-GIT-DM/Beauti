@@ -1,4 +1,6 @@
 /** One-off generator for migrations/0004_expand_catalog.sql */
+import { imageFor, productUrlFor } from "./lib/catalog-media.mjs";
+
 const IMG = {
   blush: "https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg",
   blush2: "https://images.pexels.com/photos/3373745/pexels-photo-3373745.jpeg",
@@ -380,9 +382,9 @@ function productRow(item) {
   ${sqlStr(item.name)},
   ${sqlStr(item.brand)},
   ${sqlStr(item.description)},
-  ${sqlStr(item.imageUrl)},
+  ${sqlStr(imageFor(item.id, item.imageUrl))},
   ${item.price.toFixed(2)}, 'USD',
-  ${sqlStr(`https://www.sephora.com/product/${item.id}`)},
+  ${sqlStr(productUrlFor(item))},
   ${sqlJson(item.tags)},
   ${sqlJson(item.promoCodes)},
   ${item.dealScore}, ${sqlStr(item.availability)}, ${item.restock ? sqlStr(item.restock) : "NULL"},

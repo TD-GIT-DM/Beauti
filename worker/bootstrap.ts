@@ -19,9 +19,9 @@ function executableSql(sql: string): string {
 }
 
 /**
- * Ensure schema + base seed exist. Large aisle expansions (0004, 0006) are
- * intentionally NOT auto-applied via db.exec — the full SQL is too large for a
- * single D1 exec and 500s the Worker. Apply with wrangler migrate / MCP instead:
+ * Ensure schema + base seed exist. Large aisle files (0004, 0006, 0007) are
+ * intentionally NOT auto-applied via db.exec — they are too large / numerous
+ * for a single D1 exec and 500s the Worker. Apply with wrangler / MCP instead:
  *   npm run db:migrate:local  |  npm run db:migrate:remote
  * If mac-ruby-woo is missing we no-op and keep serving the base catalog.
  */
@@ -37,13 +37,12 @@ export async function ensureCatalog(db: D1Database): Promise<void> {
     await db.exec(executableSql(seedSql));
   }
 
-  // Expanded catalog is applied via remote migrations / MCP seeding — do not
-  // db.exec 0004_expand_catalog.sql or 0006_perfume_makeup_expand.sql here
-  // (too large → Worker 500).
+  // Expanded catalog + real-image UPDATEs are applied via remote migrations /
+  // MCP seeding — do not db.exec 0004, 0006, or 0007 here (too large → Worker 500).
   const expanded = await db.prepare("SELECT id FROM products WHERE id = ?").bind("mac-ruby-woo").first();
   if (!expanded) {
     console.log(
-      "[beauti] expand catalog not applied yet (mac-ruby-woo missing); serving base catalog. Run npm run db:migrate:remote (0004 + 0006).",
+      "[beauti] expand catalog not applied yet (mac-ruby-woo missing); serving base catalog. Run npm run db:migrate:remote (0004 + 0006 + 0007).",
     );
     return;
   }
