@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { matchesQuery, parseOptionalNumber, parseSort } from "../src/lib/search";
+import { matchesQuery, parseOptionalNumber, parseSort, relevanceScore } from "../src/lib/search";
 import { scanDeals } from "../src/services/deals";
 import {
   decorateProducts,
@@ -48,7 +48,7 @@ api.get("/api/products", async (c) => {
 
   let products = await decorateProducts(c.env.DB, results ?? [], loved);
   products = filterCatalog(products, { q, tag, dealsOnly, minPrice, maxPrice, minDiscount });
-  products = sortCatalog(products, sort);
+  products = sortCatalog(products, sort, q);
   if (limit && limit > 0) products = products.slice(0, Math.min(Math.floor(limit), 200));
 
   return json(
@@ -249,15 +249,24 @@ function filterCatalog(
   return next;
 }
 
-function sortCatalog(products: ProductRecord[], sort: ReturnType<typeof parseSort>): ProductRecord[] {
+function sortCatalog(products: ProductRecord[], sort: ReturnType<typeof parseSort>, q = ""): ProductRecord[] {
   const copy = [...products];
   copy.sort((a, b) => {
     if (sort === "price_asc") return a.price - b.price || a.name.localeCompare(b.name);
     if (sort === "price_desc") return b.price - a.price || a.name.localeCompare(b.name);
     if (sort === "discount_desc") {
-      return b.discountPercent - a.discountPercent || b.dealScore - a.dealScore || a.name.localeCompare(b.name);
+      return (
+        b.discountPercent - a.discountPercent ||
+        (q ? relevanceScore(b, q) - relevanceScore(a, q) : 0) ||
+        b.dealScore - a.dealScore ||
+        a.name.localeCompare(b.name)
+      );
     }
-    return b.dealScore - a.dealScore || a.name.localeCompare(b.name);
+    return (
+      (q ? relevanceScore(b, q) - relevanceScore(a, q) : 0) ||
+      b.dealScore - a.dealScore ||
+      a.name.localeCompare(b.name)
+    );
   });
   return copy;
 }
