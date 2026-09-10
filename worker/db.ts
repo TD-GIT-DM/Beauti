@@ -46,6 +46,19 @@ function parseJson<T>(raw: string, fallback: T): T {
   }
 }
 
+/** Fake seeds used https://www.sephora.com/product/{beauti-id} (404). Rewrite to a working search. */
+function resolveProductUrl(url: string, brand: string, name: string): string {
+  const trimmed = (url || "").trim();
+  const fakeSephora =
+    /^https:\/\/www\.sephora\.com\/product\/[^/?#]+$/i.test(trimmed) &&
+    !/-P\d+/i.test(trimmed);
+  if (fakeSephora || !trimmed) {
+    const q = encodeURIComponent(`${brand} ${name}`.trim());
+    return `https://www.google.com/search?q=${q}`;
+  }
+  return trimmed;
+}
+
 export function mapProduct(
   row: ProductRow,
   extras: { priceHistory?: ProductRecord["priceHistory"]; wishlisted?: boolean } = {},
@@ -58,7 +71,7 @@ export function mapProduct(
     imageUrl: row.image_url,
     price: row.price,
     currency: row.currency,
-    productUrl: row.product_url,
+    productUrl: resolveProductUrl(row.product_url, row.brand, row.name),
     tags: parseJson<string[]>(row.tags, []),
     promoCodes: parseJson<PromoCode[]>(row.promo_codes, []),
     dealScore: row.deal_score,
