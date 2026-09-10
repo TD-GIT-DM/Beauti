@@ -1,13 +1,20 @@
 import initSql from "../migrations/0001_init.sql?raw";
 import seedSql from "../migrations/0002_seed.sql?raw";
 
+/** D1 treats `?` as bind placeholders even inside db.exec strings. */
+function stripUrlQueryParams(sql: string): string {
+  return sql.replace(/(https:\/\/[^'\s]+?)\?[^'\s]*/g, "$1");
+}
+
 function executableSql(sql: string): string {
-  return sql
-    .split("\n")
-    .map((line) => line.replace(/--.*$/, "").trimEnd())
-    .join("\n")
-    .replace(/;\s*;/g, ";")
-    .trim();
+  return stripUrlQueryParams(
+    sql
+      .split("\n")
+      .map((line) => line.replace(/--.*$/, "").trimEnd())
+      .join("\n")
+      .replace(/;\s*;/g, ";")
+      .trim(),
+  );
 }
 
 export async function ensureCatalog(db: D1Database): Promise<void> {
