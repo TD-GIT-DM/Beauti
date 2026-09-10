@@ -1,0 +1,4 @@
+# No secrets required for local mock deals.
+# For production Web Push later:
+# VAPID_PUBLIC_KEY=
+# VAPID_PRIVATE_KEY=
