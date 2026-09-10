@@ -406,12 +406,12 @@
       "brand": "CeraVe",
       "match": "2304086",
       "name": "Hydrating Facial Cleanser",
-      "placeholder": false,
+      "placeholder": true,
       "productUrl": "https://www.sephora.com/search/cerave-hydrating-facial-cleanser",
       "score": 0.85,
       "source": "ulta-cdn:2304086",
-      "url": "https://images.ulta.com/is/image/Ulta/2304086",
-      "verified": true
+      "url": null,
+      "verified": false
     },
     "cerave-resurfacing-retinol": {
       "brand": "CeraVe",
@@ -1296,12 +1296,12 @@
       "brand": "Essie",
       "match": "2208908",
       "name": "Ballet Slippers Nail Polish",
-      "placeholder": false,
+      "placeholder": true,
       "productUrl": "https://www.sephora.com/search/essie-ballet-slippers-nail-polish",
       "score": 0.85,
       "source": "ulta-cdn:2208908",
-      "url": "https://images.ulta.com/is/image/Ulta/2208908",
-      "verified": true
+      "url": null,
+      "verified": false
     },
     "essie-blanc": {
       "brand": "Essie",
@@ -1379,12 +1379,12 @@
       "brand": "Essie",
       "match": "2209078",
       "name": "Wicked Nail Polish",
-      "placeholder": false,
+      "placeholder": true,
       "productUrl": "https://www.sephora.com/search/essie-wicked-nail-polish",
       "score": 0.85,
       "source": "ulta-cdn:2209078",
-      "url": "https://images.ulta.com/is/image/Ulta/2209078",
-      "verified": true
+      "url": null,
+      "verified": false
     },
     "estee-advanced-night-repair": {
       "brand": "Est\u00e9e Lauder",
@@ -2487,12 +2487,12 @@
       "brand": "La Roche-Posay",
       "match": "2287073",
       "name": "Cicaplast Baume B5",
-      "placeholder": false,
+      "placeholder": true,
       "productUrl": "https://www.sephora.com/search/la-roche-posay-cicaplast-baume-b5",
       "score": 0.85,
       "source": "ulta-cdn:2287073",
-      "url": "https://images.ulta.com/is/image/Ulta/2287073",
-      "verified": true
+      "url": null,
+      "verified": false
     },
     "lattafa-asad": {
       "brand": "Lattafa",
@@ -3128,12 +3128,12 @@
       "brand": "Maybelline",
       "match": "2287615",
       "name": "SuperStay Matte Ink Pioneer",
-      "placeholder": false,
+      "placeholder": true,
       "productUrl": "https://www.sephora.com/search/maybelline-superstay-matte-ink-pioneer",
       "score": 0.85,
       "source": "ulta-cdn:2287615",
-      "url": "https://images.ulta.com/is/image/Ulta/2287615",
-      "verified": true
+      "url": null,
+      "verified": false
     },
     "maybelline-tattoo-black": {
       "brand": "Maybelline",
@@ -3868,12 +3868,12 @@
       "brand": "OPI",
       "match": "2269523",
       "name": "Big Apple Red Nail Lacquer",
-      "placeholder": false,
+      "placeholder": true,
       "productUrl": "https://www.sephora.com/search/opi-big-apple-red-nail-lacquer",
       "score": 0.85,
       "source": "ulta-cdn:2269523",
-      "url": "https://images.ulta.com/is/image/Ulta/2269523",
-      "verified": true
+      "url": null,
+      "verified": false
     },
     "opi-black-onyx": {
       "brand": "OPI",
@@ -4670,12 +4670,12 @@
       "brand": "Revlon",
       "match": "2260145",
       "name": "Super Lustrous Fire and Ice",
-      "placeholder": false,
+      "placeholder": true,
       "productUrl": "https://www.sephora.com/search/revlon-super-lustrous-fire-and-ice",
       "score": 0.85,
       "source": "ulta-cdn:2260145",
-      "url": "https://images.ulta.com/is/image/Ulta/2260145",
-      "verified": true
+      "url": null,
+      "verified": false
     },
     "rhode-espresso": {
       "brand": "Rhode",

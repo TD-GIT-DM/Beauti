@@ -118,7 +118,7 @@ npm run db:migrate:remote    # production D1 — applies pending files in migrat
 | `0004_expand_catalog.sql` | First aisle expansion (~100 SKUs) |
 | `0005_lipstick_images.sql` | Lipstick photo fixes |
 | `0006_perfume_makeup_expand.sql` | Deep perfume aisle + full-shade lipstick/gloss/liner, blush, foundation/concealer, eyes, nails, serums (~450 SKUs). Images have **no `?` query strings**. Inserts are batched so each statement stays under D1’s 100 KB limit. |
-| `0007_real_product_images.sql` | Official brand/retailer **pack shots** (~217 verified HTTPS URLs, no `?`) + real `product_url`s (brand/Shopify page, or a Sephora `/search/{slug}` path). The other ~363 SKUs keep the best pack-like photo and gain an `image-placeholder` tag. Do **not** `db.exec` this from `ensureCatalog` — apply with Wrangler / MCP batch updates. |
+| `0007_real_product_images.sql` | Official brand/retailer **pack shots** (~210 verified HTTPS URLs, no `?`) + real `product_url`s (brand/Shopify page, or a Sephora `/search/{slug}` path). The other ~370 SKUs keep the best pack-like photo and gain an `image-placeholder` tag. Do **not** `db.exec` this from `ensureCatalog` — apply with Wrangler / MCP batch updates. |
 
 `INSERT OR IGNORE` so re-applying is safe on an already-seeded database.
 

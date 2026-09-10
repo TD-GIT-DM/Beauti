@@ -460,13 +460,6 @@ SEPHORA_SKU = {
 ULTA_ID = {
     "mac-ruby-woo": "2621407",
     "maybelline-sky-high": "2568430",
-    "maybelline-superstay-pioneer": "2287615",
-    "essie-ballet-slippers": "2208908",
-    "essie-wicked": "2209078",
-    "opi-big-apple-red": "2269523",
-    "cerave-hydrating-cleanser": "2304086",
-    "laroche-cicaplast": "2287073",
-    "revlon-fire-ice": "2260145",
     "clinique-black-honey": "2517128",
 }
 
@@ -589,7 +582,7 @@ def head_ok(url: str) -> bool:
             if not ct.startswith("image/"):
                 return False
             # Ulta placeholder-ish tiny assets
-            if length and length < 8000:
+            if length and length < 50000:
                 return False
             return True
     except urllib.error.HTTPError as e:
