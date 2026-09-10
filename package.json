@@ -12,6 +12,7 @@
     "cf-typegen": "wrangler types",
     "db:migrate:local": "CI=1 wrangler d1 migrations apply beauti --local",
     "db:migrate:remote": "CI=1 wrangler d1 migrations apply beauti --remote",
+    "catalog:generate:0006": "node scripts/generate-perfume-makeup-expand.mjs",
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
