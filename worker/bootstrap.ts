@@ -1,5 +1,7 @@
 import initSql from "../migrations/0001_init.sql?raw";
 import seedSql from "../migrations/0002_seed.sql?raw";
+import expandSql from "../migrations/0004_expand_catalog.sql?raw";
+import lipstickImagesSql from "../migrations/0005_lipstick_images.sql?raw";
 
 /** D1 treats `?` as bind placeholders even inside db.exec strings. */
 function stripUrlQueryParams(sql: string): string {
@@ -19,8 +21,7 @@ function executableSql(sql: string): string {
 
 export async function ensureCatalog(db: D1Database): Promise<void> {
   try {
-    const row = await db.prepare("SELECT COUNT(*) AS c FROM products").first<{ c: number }>();
-    if (row && row.c > 0) return;
+    await db.prepare("SELECT COUNT(*) AS c FROM products").first<{ c: number }>();
   } catch {
     await db.exec(executableSql(initSql));
   }
@@ -28,5 +29,18 @@ export async function ensureCatalog(db: D1Database): Promise<void> {
   const row = await db.prepare("SELECT COUNT(*) AS c FROM products").first<{ c: number }>();
   if (!row || row.c === 0) {
     await db.exec(executableSql(seedSql));
+  }
+
+  const expanded = await db.prepare("SELECT id FROM products WHERE id = ?").bind("mac-ruby-woo").first();
+  if (!expanded) {
+    await db.exec(executableSql(expandSql));
+  }
+
+  const ruby = await db
+    .prepare("SELECT image_url FROM products WHERE id = ?")
+    .bind("mac-ruby-woo")
+    .first<{ image_url: string }>();
+  if (ruby?.image_url.includes("1522337660859")) {
+    await db.exec(executableSql(lipstickImagesSql));
   }
 }

@@ -1,3 +1,4 @@
+import { productDiscountPercent } from "../src/lib/discount";
 import type { Availability, PromoCode } from "../src/services/deals";
 
 export interface ProductRecord {
@@ -12,6 +13,7 @@ export interface ProductRecord {
   tags: string[];
   promoCodes: PromoCode[];
   dealScore: number;
+  discountPercent: number;
   availability: Availability;
   restockEstimate: string | null;
   priceHistory: Array<{ price: number; recordedAt: string }>;
@@ -60,6 +62,7 @@ export function mapProduct(
     tags: parseJson<string[]>(row.tags, []),
     promoCodes: parseJson<PromoCode[]>(row.promo_codes, []),
     dealScore: row.deal_score,
+    discountPercent: 0,
     availability: row.availability,
     restockEstimate: row.restock_estimate,
     priceHistory: extras.priceHistory ?? [],
@@ -86,6 +89,39 @@ export async function wishlistedIds(db: D1Database, deviceId: string | null): Pr
     .bind(deviceId)
     .all<{ product_id: string }>();
   return new Set((results ?? []).map((r) => r.product_id));
+}
+
+export function withDiscount(
+  product: ProductRecord,
+  peakHistoryPrice?: number,
+): ProductRecord {
+  return {
+    ...product,
+    discountPercent: productDiscountPercent(
+      product.promoCodes,
+      product.price,
+      product.priceHistory,
+      peakHistoryPrice,
+    ),
+  };
+}
+
+export async function loadPeakPrices(db: D1Database): Promise<Map<string, number>> {
+  const { results } = await db
+    .prepare(`SELECT product_id, MAX(price) AS peak FROM price_history GROUP BY product_id`)
+    .all<{ product_id: string; peak: number }>();
+  return new Map((results ?? []).map((row) => [row.product_id, row.peak]));
+}
+
+export async function decorateProducts(
+  db: D1Database,
+  rows: ProductRow[],
+  loved: Set<string>,
+): Promise<ProductRecord[]> {
+  const peaks = await loadPeakPrices(db);
+  return rows.map((row) =>
+    withDiscount(mapProduct(row, { wishlisted: loved.has(row.id) }), peaks.get(row.id)),
+  );
 }
 
 export async function loadHistory(

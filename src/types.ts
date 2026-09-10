@@ -23,6 +23,8 @@ export interface Product {
   tags: string[];
   promoCodes: PromoCode[];
   dealScore: number;
+  /** Best promo or price-history markdown; 0 if none. */
+  discountPercent: number;
   availability: Availability;
   restockEstimate: string | null;
   priceHistory: PricePoint[];
@@ -45,6 +47,19 @@ export interface AppNotification {
 export interface TagCount {
   name: string;
   count: number;
+}
+
+export type ProductSort = "deal" | "price_asc" | "price_desc" | "discount_desc";
+
+export interface ProductQuery {
+  q?: string;
+  tag?: string;
+  deals?: boolean;
+  minPrice?: number;
+  maxPrice?: number;
+  minDiscount?: number;
+  sort?: ProductSort;
+  limit?: number;
 }
 
 export interface ScanSummary {

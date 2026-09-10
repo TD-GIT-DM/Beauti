@@ -66,6 +66,11 @@ export function ProductPage() {
             </span>
             <HeartButton wished={wished} name={product.name} onToggle={() => void toggleWish(product.id)} />
           </div>
+          {product.discountPercent > 0 ? (
+            <p className="promo" style={{ width: "max-content" }}>
+              {product.discountPercent}% off
+            </p>
+          ) : null}
           {product.promoCodes.map((code) => (
             <p className="promo" key={code.code} style={{ width: "max-content" }}>
               {code.code} · {code.label}

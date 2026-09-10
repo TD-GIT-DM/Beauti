@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { formatPrice, stockLabel } from "../lib/format";
+import { formatDiscount, formatPrice, stockLabel } from "../lib/format";
 import type { Product } from "../types";
 import { HeartButton } from "./HeartButton";
 
@@ -8,11 +8,21 @@ interface Props {
   wished: boolean;
   onToggle: (id: string) => void;
   variant?: "hero" | "grid" | "detail";
+  dealRank?: number;
+  dealTotal?: number;
 }
 
-export function ProductCover({ product, wished, onToggle, variant = "hero" }: Props) {
+export function ProductCover({
+  product,
+  wished,
+  onToggle,
+  variant = "hero",
+  dealRank,
+  dealTotal,
+}: Props) {
   const promo = product.promoCodes[0];
   const to = `/product/${product.id}`;
+  const discount = product.discountPercent ?? 0;
 
   return (
     <article className={`cover ${variant}`}>
@@ -30,7 +40,14 @@ export function ProductCover({ product, wished, onToggle, variant = "hero" }: Pr
       <div className="cover-actions">
         <HeartButton wished={wished} name={product.name} onToggle={() => onToggle(product.id)} />
       </div>
+      {discount > 0 ? <span className="discount-badge">{formatDiscount(discount)}</span> : null}
       <div className="cover-body">
+        {dealRank ? (
+          <div className="brand-kicker">
+            Top deal {String(dealRank).padStart(2, "0")}
+            {dealTotal ? ` of ${dealTotal}` : ""}
+          </div>
+        ) : null}
         <div className="brand-kicker">{product.brand}</div>
         {variant === "grid" ? (
           <h2 className="product-name">

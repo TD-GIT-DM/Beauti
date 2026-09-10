@@ -1,6 +1,17 @@
 import { Hono } from "hono";
+import { matchesQuery, parseOptionalNumber, parseSort, relevanceScore } from "../src/lib/search";
 import { scanDeals } from "../src/services/deals";
-import { deviceCookie, deviceIdFrom, loadHistory, mapProduct, wishlistedIds, type ProductRow } from "./db";
+import {
+  decorateProducts,
+  deviceCookie,
+  deviceIdFrom,
+  loadHistory,
+  mapProduct,
+  wishlistedIds,
+  withDiscount,
+  type ProductRecord,
+  type ProductRow,
+} from "./db";
 
 type AppEnv = { Bindings: Env };
 
@@ -20,9 +31,14 @@ export const api = new Hono<AppEnv>();
 api.get("/api/health", (c) => c.json({ ok: true, name: "Beauti" }));
 
 api.get("/api/products", async (c) => {
-  const q = (c.req.query("q") ?? "").trim().toLowerCase();
+  const q = (c.req.query("q") ?? "").trim();
   const tag = (c.req.query("tag") ?? "").trim().toLowerCase();
   const dealsOnly = c.req.query("deals") === "1";
+  const minPrice = parseOptionalNumber(c.req.query("minPrice"));
+  const maxPrice = parseOptionalNumber(c.req.query("maxPrice"));
+  const minDiscount = parseOptionalNumber(c.req.query("minDiscount"));
+  const sort = parseSort(c.req.query("sort"));
+  const limit = parseOptionalNumber(c.req.query("limit"));
   const deviceId = deviceIdFrom(c.req.raw);
   const loved = await wishlistedIds(c.env.DB, deviceId);
 
@@ -30,22 +46,16 @@ api.get("/api/products", async (c) => {
     `SELECT * FROM products ORDER BY deal_score DESC, name ASC`,
   ).all<ProductRow>();
 
-  let products = (results ?? []).map((row) => mapProduct(row, { wishlisted: loved.has(row.id) }));
+  let products = await decorateProducts(c.env.DB, results ?? [], loved);
+  products = filterCatalog(products, { q, tag, dealsOnly, minPrice, maxPrice, minDiscount });
+  products = sortCatalog(products, sort, q);
+  if (limit && limit > 0) products = products.slice(0, Math.min(Math.floor(limit), 200));
 
-  if (q) {
-    products = products.filter((p) => {
-      const hay = `${p.name} ${p.brand} ${p.description} ${p.tags.join(" ")}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }
-  if (tag) {
-    products = products.filter((p) => p.tags.some((t) => t.toLowerCase() === tag));
-  }
-  if (dealsOnly) {
-    products = products.filter((p) => p.dealScore >= 75 && p.promoCodes.length > 0);
-  }
-
-  return json({ products, query: q, tag }, {}, deviceId);
+  return json(
+    { products, query: q, tag, minPrice, maxPrice, minDiscount, sort },
+    {},
+    deviceId,
+  );
 });
 
 api.get("/api/products/:id", async (c) => {
@@ -55,7 +65,8 @@ api.get("/api/products/:id", async (c) => {
   if (!row) return json({ error: "Not found" }, { status: 404 }, deviceId);
   const loved = await wishlistedIds(c.env.DB, deviceId);
   const priceHistory = await loadHistory(c.env.DB, id);
-  return json({ product: mapProduct(row, { priceHistory, wishlisted: loved.has(id) }) }, {}, deviceId);
+  const product = withDiscount(mapProduct(row, { priceHistory, wishlisted: loved.has(id) }));
+  return json({ product }, {}, deviceId);
 });
 
 api.get("/api/tags", async (c) => {
@@ -79,13 +90,14 @@ api.get("/api/tags", async (c) => {
 api.get("/api/deals", async (c) => {
   const deviceId = deviceIdFrom(c.req.raw);
   const loved = await wishlistedIds(c.env.DB, deviceId);
-  const { results } = await c.env.DB.prepare(
-    `SELECT * FROM products WHERE deal_score >= 70 ORDER BY deal_score DESC LIMIT 8`,
-  ).all<ProductRow>();
+  const { results } = await c.env.DB.prepare(`SELECT * FROM products`).all<ProductRow>();
+  const products = sortCatalog(await decorateProducts(c.env.DB, results ?? [], loved), "discount_desc")
+    .filter((p) => p.discountPercent > 0)
+    .slice(0, 5);
   const lastScan = await c.env.DEALS_CACHE.get("deals:last-scan");
   return json(
     {
-      products: (results ?? []).map((row) => mapProduct(row, { wishlisted: loved.has(row.id) })),
+      products,
       lastScan: lastScan ? JSON.parse(lastScan) : null,
     },
     {},
@@ -119,7 +131,7 @@ api.get("/api/wishlist", async (c) => {
     .bind(...loved)
     .all<ProductRow>();
   return json(
-    { products: (results ?? []).map((row) => mapProduct(row, { wishlisted: true })), deviceId },
+    { products: await decorateProducts(c.env.DB, results ?? [], loved), deviceId },
     {},
     deviceId,
   );
@@ -198,3 +210,63 @@ api.post("/api/push/subscribe", async (c) => {
     .run();
   return json({ ok: true }, {}, deviceId);
 });
+
+function filterCatalog(
+  products: ProductRecord[],
+  opts: {
+    q: string;
+    tag: string;
+    dealsOnly: boolean;
+    minPrice?: number;
+    maxPrice?: number;
+    minDiscount?: number;
+  },
+): ProductRecord[] {
+  let next = products;
+  if (opts.q) {
+    next = next.filter((p) =>
+      matchesQuery(
+        [
+          p.name,
+          p.brand,
+          p.description,
+          p.tags,
+          p.promoCodes.map((code) => `${code.code} ${code.label}`),
+        ],
+        opts.q,
+      ),
+    );
+  }
+  if (opts.tag) {
+    next = next.filter((p) => p.tags.some((t) => t.toLowerCase() === opts.tag));
+  }
+  if (opts.dealsOnly) {
+    next = next.filter((p) => p.discountPercent > 0 && p.promoCodes.length > 0);
+  }
+  if (opts.minPrice != null) next = next.filter((p) => p.price >= opts.minPrice!);
+  if (opts.maxPrice != null) next = next.filter((p) => p.price <= opts.maxPrice!);
+  if (opts.minDiscount != null) next = next.filter((p) => p.discountPercent >= opts.minDiscount!);
+  return next;
+}
+
+function sortCatalog(products: ProductRecord[], sort: ReturnType<typeof parseSort>, q = ""): ProductRecord[] {
+  const copy = [...products];
+  copy.sort((a, b) => {
+    if (sort === "price_asc") return a.price - b.price || a.name.localeCompare(b.name);
+    if (sort === "price_desc") return b.price - a.price || a.name.localeCompare(b.name);
+    if (sort === "discount_desc") {
+      return (
+        b.discountPercent - a.discountPercent ||
+        (q ? relevanceScore(b, q) - relevanceScore(a, q) : 0) ||
+        b.dealScore - a.dealScore ||
+        a.name.localeCompare(b.name)
+      );
+    }
+    return (
+      (q ? relevanceScore(b, q) - relevanceScore(a, q) : 0) ||
+      b.dealScore - a.dealScore ||
+      a.name.localeCompare(b.name)
+    );
+  });
+  return copy;
+}
