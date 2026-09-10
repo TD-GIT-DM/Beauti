@@ -285,6 +285,7 @@ img {
 .cover img {
   position: absolute;
   inset: 0;
+  z-index: 1;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -295,6 +296,7 @@ img {
 .cover-fallback {
   position: absolute;
   inset: 0;
+  z-index: 0;
   background:
     radial-gradient(circle at 30% 20%, rgba(212, 175, 55, 0.25), transparent 45%),
     linear-gradient(160deg, #1a1610, #070707);
@@ -303,6 +305,7 @@ img {
 .cover-scrim {
   position: absolute;
   inset: 0;
+  z-index: 2;
   background:
     linear-gradient(to top, rgba(5, 5, 5, 0.92) 0%, rgba(5, 5, 5, 0.35) 42%, rgba(5, 5, 5, 0.15) 100%),
     linear-gradient(to right, rgba(0, 0, 0, 0.25), transparent 40%);
@@ -311,6 +314,7 @@ img {
 .cover-body {
   position: absolute;
   inset: auto 0 0;
+  z-index: 3;
   padding: 1.25rem 1.25rem max(1.4rem, env(safe-area-inset-bottom));
   display: grid;
   gap: 0.45rem;
@@ -399,6 +403,7 @@ img {
   position: absolute;
   top: max(5.4rem, calc(env(safe-area-inset-top) + 4.6rem));
   right: 1rem;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;

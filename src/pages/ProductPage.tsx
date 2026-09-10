@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { EmptyState } from "../components/EmptyState";
-import { formatPrice, HeartButton, ProductCover, stockLabel } from "../components/ProductCover";
+import { formatPrice, stockLabel } from "../lib/format";
+import { HeartButton } from "../components/HeartButton";
+import { ProductCover } from "../components/ProductCover";
 import { useApp } from "../context/AppContext";
 import type { Product } from "../types";
 

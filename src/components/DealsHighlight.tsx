@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { formatPrice } from "./ProductCover";
+import { formatPrice } from "../lib/format";
 import type { Product } from "../types";
 
 export function DealsHighlight({ products }: { products: Product[] }) {

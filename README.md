@@ -95,11 +95,13 @@ Replace `MockRetailerFeed` with an Impact / CJ / ShareASale / retailer **feed** 
 
 3. `npm run deploy`
 
-Live URL (fill in after deploy):
+Live URL after a successful `wrangler login` + `npm run deploy`:
 
 ```
 https://beauti.<your-subdomain>.workers.dev
 ```
+
+This environment’s Wrangler CLI was not logged into the Cloudflare account that owns the provisioned D1/KV (IDs are already in `wrangler.toml`). Run `npx wrangler login` (or set `CLOUDFLARE_API_TOKEN` for that account), then `npm run deploy`. A preview `wrangler deploy --temporary` cannot attach those existing D1/KV IDs.
 
 First request also bootstraps schema + seed if the catalog is empty, so a fresh D1 still shows ~18 products.
 
