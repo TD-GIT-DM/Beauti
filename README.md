@@ -51,7 +51,7 @@ Or use **Notifications → Run deal scan** (same scanner, with a forced restock 
 
 - **Home** — the **five highest discount %** deals, one product per viewport (scroll-snap). Discount comes from promo `discountPercent`, or from a drop vs price-history peak when that is larger. A final slide links into search.
 - **Search** — `/search` is a dedicated tab (header magnifying glass). Empty state: **filter control at the top**, search bar **centered** in the viewport. Results: `/search?q=` / `tag=` plus price and discount filters.
-- Multi-word queries are **AND-tokenized** (`red lipstick` matches tags/name/description that contain both `red` and `lipstick`).
+- Multi-word queries are **AND-tokenized** (`red lipstick` matches tags/name/description that contain both `red` and `lipstick`), then ranked so name and tag hits beat a mention in copy.
 - Out-of-stock products stay visible; the description includes a **restock estimate** (date range or “unknown / may not return”)
 
 ## Wishlist & notifications
