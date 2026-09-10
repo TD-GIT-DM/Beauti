@@ -103,20 +103,34 @@ https://beauti.<your-subdomain>.workers.dev
 
 This environment’s Wrangler CLI was not logged into the Cloudflare account that owns the provisioned D1/KV (IDs are already in `wrangler.toml`). Run `npx wrangler login` (or set `CLOUDFLARE_API_TOKEN` for that account), then `npm run deploy`. A preview `wrangler deploy --temporary` cannot attach those existing D1/KV IDs.
 
-First request also bootstraps schema + seed if the catalog is empty, and applies the expanded aisle (`0004_expand_catalog`) if `mac-ruby-woo` is missing — so a fresh or previously seeded D1 still reaches **100+** products.
+First request bootstraps **schema + the original ~18 seed SKUs only** (`0001_init` + `0002_seed`). It does **not** `db.exec` the large aisle files — that 500s production D1.
 
-### Remote D1 catalog (already-deployed database)
-
-If production D1 still has the original ~18 products, apply the new migration (safe `INSERT OR IGNORE`) then deploy:
+The comprehensive catalog lives in later migrations and must be applied with Wrangler:
 
 ```bash
-npm run db:migrate:remote    # applies pending files in migrations/, including 0004_expand_catalog.sql
+npm run db:migrate:local     # local SQLite (also runs at the start of npm run dev)
+npm run db:migrate:remote    # production D1 — applies pending files in migrations/
+```
+
+| Migration | What it adds |
+| --- | --- |
+| `0004_expand_catalog.sql` | First aisle expansion (~100 SKUs) |
+| `0005_lipstick_images.sql` | Lipstick photo fixes |
+| `0006_perfume_makeup_expand.sql` | Deep perfume aisle + full-shade lipstick/gloss/liner, blush, foundation/concealer, eyes, nails, serums (~450 SKUs). Images have **no `?` query strings**. Inserts are batched so each statement stays under D1’s 100 KB limit. |
+
+`INSERT OR IGNORE` so re-applying is safe on an already-seeded database.
+
+```bash
+npm run db:migrate:remote    # includes 0004 + 0006
 npm run deploy               # also runs remote migrate, then wrangler deploy
 ```
 
-Locally: `npm run db:migrate:local` (or just `npm run dev`, which migrates first).
+Regenerate SQL from the product lists:
 
-You can regenerate `0004` from the product list with `node scripts/generate-expand-catalog.mjs`.
+```bash
+node scripts/generate-expand-catalog.mjs            # writes 0004
+node scripts/generate-perfume-makeup-expand.mjs     # writes 0006
+```
 
 ## API (for a future mobile app)
 
