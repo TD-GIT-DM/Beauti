@@ -13,3 +13,7 @@ export function stockLabel(product: Product) {
   if (product.availability === "limited") return "Limited";
   return "In stock";
 }
+
+export function formatDiscount(percent: number) {
+  return `${Math.round(percent)}% off`;
+}

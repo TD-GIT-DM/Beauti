@@ -1,6 +1,6 @@
 # Beauti
 
-A dark, luxurious beauty shopping companion: editorial one-at-a-time browse, tag search, promo codes, a heart wishlist, and restock / price-drop alerts.
+A dark, luxurious beauty shopping companion: top-discount editorial browse, tokenized catalog search, promo codes, a heart wishlist, and restock / price-drop alerts.
 
 Beauti is **API-first** (Cloudflare Worker + D1) with a componentized React UI so the same catalog, wishlist, and notification APIs can power a later mobile app.
 
@@ -49,9 +49,9 @@ Or use **Notifications → Run deal scan** (same scanner, with a forced restock 
 
 ## Catalog UX
 
-- **Home** — one product per viewport, vertical scroll-snap (TikTok / editorial)
-- **Search / tag** — `/search?q=` or `/search?tag=` switches to a multi-column grid
-- Clearing the search box returns to one-at-a-time browse
+- **Home** — the **five highest discount %** deals, one product per viewport (scroll-snap). Discount comes from promo `discountPercent`, or from a drop vs price-history peak when that is larger. A final slide links into search.
+- **Search** — `/search` is a dedicated tab (header magnifying glass). Empty state: **filter control at the top**, search bar **centered** in the viewport. Results: `/search?q=` / `tag=` plus price and discount filters.
+- Multi-word queries are **AND-tokenized** (`red lipstick` matches tags/name/description that contain both `red` and `lipstick`).
 - Out-of-stock products stay visible; the description includes a **restock estimate** (date range or “unknown / may not return”)
 
 ## Wishlist & notifications
@@ -103,16 +103,29 @@ https://beauti.<your-subdomain>.workers.dev
 
 This environment’s Wrangler CLI was not logged into the Cloudflare account that owns the provisioned D1/KV (IDs are already in `wrangler.toml`). Run `npx wrangler login` (or set `CLOUDFLARE_API_TOKEN` for that account), then `npm run deploy`. A preview `wrangler deploy --temporary` cannot attach those existing D1/KV IDs.
 
-First request also bootstraps schema + seed if the catalog is empty, so a fresh D1 still shows ~18 products.
+First request also bootstraps schema + seed if the catalog is empty, and applies the expanded aisle (`0004_expand_catalog`) if `mac-ruby-woo` is missing — so a fresh or previously seeded D1 still reaches **100+** products.
+
+### Remote D1 catalog (already-deployed database)
+
+If production D1 still has the original ~18 products, apply the new migration (safe `INSERT OR IGNORE`) then deploy:
+
+```bash
+npm run db:migrate:remote    # applies pending files in migrations/, including 0004_expand_catalog.sql
+npm run deploy               # also runs remote migrate, then wrangler deploy
+```
+
+Locally: `npm run db:migrate:local` (or just `npm run dev`, which migrates first).
+
+You can regenerate `0004` from the product list with `node scripts/generate-expand-catalog.mjs`.
 
 ## API (for a future mobile app)
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/api/products?q=&tag=` | Catalog + search |
+| GET | `/api/products?q=&tag=&minPrice=&maxPrice=&minDiscount=&sort=&limit=` | Catalog + tokenized search. `sort`: `deal` (default), `price_asc`, `price_desc`, `discount_desc` |
 | GET | `/api/products/:id` | Detail + price history |
 | GET | `/api/tags` | Tag cloud |
-| GET | `/api/deals` | High `dealScore` highlight |
+| GET | `/api/deals` | Top 5 by computed discount % |
 | POST | `/api/deals/scan` | `{ "force": "cycle" \| "restock" \| "drop" }` |
 | GET/POST/DELETE | `/api/wishlist` | Device-scoped hearts |
 | GET | `/api/notifications` | Inbox |

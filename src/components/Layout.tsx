@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 
@@ -7,12 +7,17 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [q, setQ] = useState(() => new URLSearchParams(location.search).get("q") ?? "");
-  const solid = location.pathname !== "/";
+  const onSearchPage = location.pathname === "/search";
+  const solid = location.pathname !== "/" || onSearchPage;
+
+  useEffect(() => {
+    if (!onSearchPage) setQ(new URLSearchParams(location.search).get("q") ?? "");
+  }, [location.search, onSearchPage]);
 
   function onSearch(e: FormEvent) {
     e.preventDefault();
     const value = q.trim();
-    if (!value) navigate("/");
+    if (!value) navigate("/search");
     else navigate(`/search?q=${encodeURIComponent(value)}`);
   }
 
@@ -21,26 +26,34 @@ export function Layout() {
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <header className={`app-header ${solid ? "solid" : ""}`}>
+      <header className={`app-header ${solid ? "solid" : ""} ${onSearchPage ? "compact" : ""}`}>
         <Link className="wordmark" to="/">
           Beauti
         </Link>
-        <form className="search-form" onSubmit={onSearch} role="search">
-          <label className="sr-only" htmlFor="catalog-search">
-            Search products and tags
-          </label>
-          <input
-            id="catalog-search"
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              if (e.target.value === "") navigate("/");
-            }}
-            placeholder="Search tags, brands, glow…"
-            autoComplete="off"
-          />
-        </form>
+        {onSearchPage ? null : (
+          <form className="search-form" onSubmit={onSearch} role="search">
+            <label className="sr-only" htmlFor="catalog-search">
+              Search products and tags
+            </label>
+            <input
+              id="catalog-search"
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value);
+                if (e.target.value === "") navigate("/");
+              }}
+              placeholder="Search tags, brands, glow…"
+              autoComplete="off"
+            />
+          </form>
+        )}
         <nav className="header-actions" aria-label="Account">
+          <NavLink className="icon-btn" to="/search" aria-label="Search catalog">
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+              <path d="M16 16.5 21 21" fill="none" stroke="currentColor" strokeWidth="1.6" />
+            </svg>
+          </NavLink>
           <NavLink className="icon-btn" to="/wishlist" aria-label="Wishlist">
             <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
               <path

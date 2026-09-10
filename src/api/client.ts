@@ -1,4 +1,4 @@
-import type { AppNotification, Product, ScanSummary, TagCount } from "../types";
+import type { AppNotification, Product, ProductQuery, ScanSummary, TagCount } from "../types";
 
 const DEVICE_KEY = "beauti_device";
 const WISHLIST_KEY = "beauti_wishlist";
@@ -40,11 +40,16 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  products: (params: { q?: string; tag?: string; deals?: boolean } = {}) => {
+  products: (params: ProductQuery = {}) => {
     const search = new URLSearchParams();
     if (params.q) search.set("q", params.q);
     if (params.tag) search.set("tag", params.tag);
     if (params.deals) search.set("deals", "1");
+    if (params.minPrice != null) search.set("minPrice", String(params.minPrice));
+    if (params.maxPrice != null) search.set("maxPrice", String(params.maxPrice));
+    if (params.minDiscount != null) search.set("minDiscount", String(params.minDiscount));
+    if (params.sort) search.set("sort", params.sort);
+    if (params.limit != null) search.set("limit", String(params.limit));
     const qs = search.toString();
     return request<{ products: Product[]; query: string; tag: string }>(`/api/products${qs ? `?${qs}` : ""}`);
   },

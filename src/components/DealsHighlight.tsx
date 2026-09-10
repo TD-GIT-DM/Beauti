@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { formatPrice } from "../lib/format";
+import { formatDiscount, formatPrice } from "../lib/format";
 import type { Product } from "../types";
 
 export function DealsHighlight({ products }: { products: Product[] }) {
@@ -11,6 +11,7 @@ export function DealsHighlight({ products }: { products: Product[] }) {
         {loop.map((product, i) => (
           <Link className="deal-chip" to={`/product/${product.id}`} key={`${product.id}-${i}`}>
             <strong>{product.name}</strong>
+            {product.discountPercent > 0 ? <span>{formatDiscount(product.discountPercent)}</span> : null}
             <span>{formatPrice(product.price, product.currency)}</span>
             {product.promoCodes[0] ? <code>{product.promoCodes[0].code}</code> : null}
           </Link>
