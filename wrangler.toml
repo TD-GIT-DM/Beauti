@@ -1,0 +1,33 @@
+# Beauti — Cloudflare Workers + static assets (SPA) + D1 + KV + Cron
+name = "beauti"
+main = "worker/index.ts"
+compatibility_date = "2026-09-10"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "beauti"
+database_id = "f83c9aae-86c4-457a-882a-fd86d1fb85bb"
+migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "DEALS_CACHE"
+id = "80ead3ba6f2b4678956c3cac9c8bebc8"
+
+# Deal scan + wishlist alert check every 15 minutes (UTC)
+[triggers]
+crons = ["*/15 * * * *"]
+
+[vars]
+APP_NAME = "Beauti"
