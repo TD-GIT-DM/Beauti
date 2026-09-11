@@ -14,6 +14,7 @@ interface ProductRow {
   name: string;
   brand: string;
   price: number;
+  list_price?: number | null;
   currency: string;
   promo_codes: string;
   deal_score: number;
@@ -36,6 +37,7 @@ function toCatalog(row: ProductRow): CatalogProduct {
     name: row.name,
     brand: row.brand,
     price: row.price,
+    listPrice: row.list_price != null && row.list_price > 0 ? row.list_price : null,
     currency: row.currency,
     promoCodes: parsePromos(row.promo_codes),
     dealScore: row.deal_score,
@@ -87,8 +89,11 @@ async function createNotifications(
 }
 
 /**
- * Periodic deal scan: mock (or future affiliate) feed → D1 catalog + price history,
- * then wishlist restock / price-drop notifications.
+ * Periodic deal scan.
+ *
+ * Cron (no `force`) is a heartbeat only — it must not overwrite honest catalog
+ * prices / promo_codes with mock inventions. Manual Notifications → Run deal scan
+ * still applies a demo restock / drop.
  */
 export async function scanDeals(env: Bindings, options: ScanOptions = {}): Promise<ScanSummary> {
   const now = options.now ?? new Date();
@@ -96,6 +101,19 @@ export async function scanDeals(env: Bindings, options: ScanOptions = {}): Promi
 
   const counterRaw = await env.DEALS_CACHE.get("deals:scan-index");
   const scanIndex = Number(counterRaw ?? "0") + 1;
+
+  if (!options.force) {
+    const summary: ScanSummary = {
+      scannedAt: nowIso,
+      updated: 0,
+      restocks: [],
+      priceDrops: [],
+      notificationsCreated: 0,
+    };
+    await env.DEALS_CACHE.put("deals:scan-index", String(scanIndex));
+    await env.DEALS_CACHE.put("deals:last-scan", JSON.stringify(summary), { expirationTtl: 60 * 60 * 24 * 7 });
+    return summary;
+  }
 
   const { results } = await env.DB.prepare(
     `SELECT id, name, brand, price, currency, promo_codes, deal_score, availability, restock_estimate
@@ -105,10 +123,7 @@ export async function scanDeals(env: Bindings, options: ScanOptions = {}): Promi
   const catalog = (results ?? []).map(toCatalog);
   const provider = new MockRetailerFeed(scanIndex);
   let snapshots = await provider.fetchDeals(catalog);
-
-  if (options.force) {
-    snapshots = applyForcedEvents(catalog, snapshots, options.force);
-  }
+  snapshots = applyForcedEvents(catalog, snapshots, options.force);
 
   const byId = new Map(catalog.map((p) => [p.id, p]));
   const restocks: string[] = [];

@@ -4,6 +4,8 @@ export interface PromoCode {
   code: string;
   label: string;
   discountPercent?: number;
+  /** True only for a confirmed retailer/brand promo — never invented seed codes. */
+  verified?: boolean;
 }
 
 export interface PricePoint {
@@ -18,12 +20,14 @@ export interface Product {
   description: string;
   imageUrl: string;
   price: number;
+  /** Retailer list / compare-at when known; equals price when there is no markdown. */
+  listPrice?: number | null;
   currency: string;
   productUrl: string;
   tags: string[];
   promoCodes: PromoCode[];
   dealScore: number;
-  /** Best promo or price-history markdown; 0 if none. */
+  /** Real list-vs-sale (or verified promo); 0 if the linked page is full price. */
   discountPercent: number;
   availability: Availability;
   restockEstimate: string | null;

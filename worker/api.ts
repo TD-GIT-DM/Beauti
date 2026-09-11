@@ -240,7 +240,7 @@ function filterCatalog(
     next = next.filter((p) => p.tags.some((t) => t.toLowerCase() === opts.tag));
   }
   if (opts.dealsOnly) {
-    next = next.filter((p) => p.discountPercent > 0 && p.promoCodes.length > 0);
+    next = next.filter((p) => p.discountPercent > 0);
   }
   if (opts.minPrice != null) next = next.filter((p) => p.price >= opts.minPrice!);
   if (opts.maxPrice != null) next = next.filter((p) => p.price <= opts.maxPrice!);
@@ -248,7 +248,10 @@ function filterCatalog(
   return next;
 }
 
-/** Prefer discounted SKUs with distinct pack shots so the home five never collapse into one photo. */
+/**
+ * Home five: real markdowns first (unique pack shots), then honest full-price
+ * best-price picks — never invent a % badge to fill the slate.
+ */
 export function pickTopDeals(ranked: ProductRecord[], limit = 5): ProductRecord[] {
   const picked: ProductRecord[] = [];
   const usedImages = new Set<string>();
@@ -262,10 +265,13 @@ export function pickTopDeals(ranked: ProductRecord[], limit = 5): ProductRecord[
     }
   };
   const discounted = ranked.filter((product) => product.discountPercent > 0);
+  const bestPrice = [...ranked]
+    .filter((product) => product.discountPercent <= 0)
+    .sort((a, b) => a.price - b.price || b.dealScore - a.dealScore || a.name.localeCompare(b.name));
   take(discounted, true);
   take(discounted, false);
-  take(ranked, true);
-  take(ranked, false);
+  take(bestPrice, true);
+  take(bestPrice, false);
   return picked;
 }
 

@@ -17,7 +17,10 @@
     "catalog:generate:0007": "node scripts/generate-real-product-images.mjs",
     "catalog:resolve-urls": "python3 scripts/resolve-real-product-urls.py",
     "catalog:generate:0008": "node scripts/generate-real-product-urls.mjs",
+    "catalog:resolve-prices": "python3 scripts/resolve-honest-prices.py",
+    "catalog:generate:0009": "node scripts/generate-honest-prices.mjs",
     "catalog:test-urls": "node scripts/test-product-url.mjs",
+    "catalog:test-prices": "node scripts/test-honest-prices.mjs",
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {

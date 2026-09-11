@@ -11,7 +11,7 @@ Beauti is **API-first** (Cloudflare Worker + D1) with a componentized React UI s
 - D1 — products, price history, wishlist, notifications
 - KV — deal-scan cache
 - Cron Trigger — deal scanner every 15 minutes
-- Mock retailer feed at `src/services/deals/` (swap for real affiliate APIs later; **do not scrape storefronts**)
+- Mock retailer feed at `src/services/deals/` (demo restock / drop only; production cron does not invent prices; **do not scrape storefronts**)
 
 ## Local setup
 
@@ -35,6 +35,9 @@ Open [http://localhost:5173](http://localhost:5173).
 | `npm run catalog:resolve-images` | Refresh official pack-shot map + `0007_real_product_images.sql` |
 | `npm run catalog:resolve-urls` | Sephora catalog lookup + HEAD checks → `scripts/data/real-product-urls.json` |
 | `npm run catalog:generate:0008` | Write `0008_real_product_urls.sql` from that JSON |
+| `npm run catalog:resolve-prices` | Sephora catalog JSON + Shopify product JSON + known MSRP → `scripts/data/honest-prices.json` |
+| `npm run catalog:generate:0009` | Write `0009_honest_prices.sql` from that JSON |
+| `npm run catalog:test-prices` | Assert no invented promo codes; discount only when list > sale |
 
 The Worker config lives in **`wrangler.toml`** (Wrangler also accepts `wrangler.jsonc`; this project uses TOML). Bindings:
 
@@ -52,7 +55,7 @@ Or use **Notifications → Run deal scan** (same scanner, with a forced restock 
 
 ## Catalog UX
 
-- **Home** — the **five highest discount %** deals, one product per viewport (scroll-snap). Discount comes from promo `discountPercent`, or from a drop vs price-history peak when that is larger. A final slide links into search.
+- **Home** — up to **five real markdowns** (list vs sale on the linked retailer/brand page), one product per viewport (scroll-snap). If fewer than five SKUs are actually on sale, the slate fills with honest best-price picks and **no fake % off badge**. Discount is never invented from seed promo codes or mock price-history peaks.
 - **Search** — `/search` is a dedicated tab (header magnifying glass). Empty state: **filter control at the top**, search bar **centered** in the viewport. Results: `/search?q=` / `tag=` plus price and discount filters.
 - Multi-word queries are **AND-tokenized** (`red lipstick` matches tags/name/description that contain both `red` and `lipstick`), then ranked so name and tag hits beat a mention in copy.
 - Out-of-stock products stay visible; the description includes a **restock estimate** (date range or “unknown / may not return”)
@@ -64,6 +67,8 @@ Guest v1 uses a stable **device id** (`localStorage` + `X-Device-Id` header + co
 When the deal scanner sees a wishlisted item **restock** or **drop in price**, it inserts rows in `notifications`. The in-app bell lists them. If you grant Notification permission, the service worker (`/sw.js`) shows a browser notification.
 
 ### Email later
+
+The cron is a **heartbeat only** — it does not overwrite honest catalog prices with mock drops. Manual **Notifications → Run deal scan** still forces a demo restock / drop for alerts.
 
 The cron already creates notification records. To email:
 
@@ -80,7 +85,7 @@ The cron already creates notification records. To email:
 ```
 src/services/deals/
   types.ts          DealProvider, DealSnapshot, AffiliateClient
-  mock-retailer.ts  MockRetailerFeed (simulated prices / codes / stock)
+  mock-retailer.ts  MockRetailerFeed (identity snapshots; forced demo events only)
   index.ts          scanDeals() → D1 + KV + wishlist alerts
 ```
 
@@ -122,18 +127,19 @@ npm run db:migrate:remote    # production D1 — applies pending files in migrat
 | `0006_perfume_makeup_expand.sql` | Deep perfume aisle + full-shade lipstick/gloss/liner, blush, foundation/concealer, eyes, nails, serums (~450 SKUs). Images have **no `?` query strings**. Inserts are batched so each statement stays under D1’s 100 KB limit. |
 | `0007_real_product_images.sql` | Official brand/retailer **pack shots** (~210 verified HTTPS URLs, no `?`) + real `product_url`s (brand/Shopify page, or a Sephora `/search/{slug}` path). The other ~370 SKUs keep the best pack-like photo and gain an `image-placeholder` tag. Do **not** `db.exec` this from `ensureCatalog` — apply with Wrangler / MCP batch updates. |
 | `0008_real_product_urls.sql` | Replaces Google / fake `sephora.com/product/{beauti-id}` links with **verified retailer or brand PDPs** (**441 / 580**: 367 Sephora `-P` pages, 74 official brand PDPs). The other **139** SKUs get a path-only Sephora `/search/{slug}` or Ulta `/brand/{brand}` URL (no `?` in SQL). Do **not** `db.exec` this from `ensureCatalog`. |
+| `0009_honest_prices.sql` | Adds `list_price`, rewrites `price` / `promo_codes` / `deal_score` from Sephora catalog JSON, Shopify product JSON, or known MSRP. Clears invented seed coupons and fake price-history peaks. Do **not** `db.exec` this from `ensureCatalog`. |
 
 `INSERT OR IGNORE` so re-applying is safe on an already-seeded database.
 
 ### Apply `0008` to production D1
 
-`ensureCatalog` never runs `0008` (same 100 KB / statement-volume limit that 500s 0004/0006/0007). Apply the file with Wrangler or Cloudflare MCP.
+`ensureCatalog` never runs `0008` or `0009` (same 100 KB / statement-volume limit that 500s 0004/0006/0007). Apply the files with Wrangler or Cloudflare MCP.
 
 **Wrangler (preferred):**
 
 ```bash
 npm run db:migrate:remote    # CI=1 wrangler d1 migrations apply beauti --remote
-# includes any pending files in migrations/, including 0008_real_product_urls.sql
+# includes any pending files in migrations/, including 0008 + 0009
 npm run deploy               # also runs remote migrate, then wrangler deploy
 ```
 
@@ -161,7 +167,29 @@ python3 scripts/resolve-real-product-images.py      # Shopify/Wikimedia/CDN look
 node scripts/generate-real-product-images.mjs       # writes 0007 from that JSON
 python3 scripts/resolve-real-product-urls.py        # Sephora catalog JSON + HEAD checks → JSON
 node scripts/generate-real-product-urls.mjs         # writes 0008 from that JSON
+python3 scripts/resolve-honest-prices.py            # Sephora catalog + Shopify JSON + known MSRP → JSON
+node scripts/generate-honest-prices.mjs             # writes 0009 from that JSON
 ```
+
+### Re-run price sync
+
+Prices must match the retailer/brand page we link to (or the lowest found current selling price from that source). Do not invent markdowns.
+
+```bash
+npm run catalog:resolve-prices    # talks to Sephora catalog JSON + Shopify /products/{handle}.js
+npm run catalog:generate:0009     # rewrites migrations/0009_honest_prices.sql
+npm run catalog:test-prices
+npm run db:migrate:local          # or db:migrate:remote
+```
+
+`resolve-honest-prices.py` prefers:
+
+1. **Sephora catalog search JSON** for SKUs whose stored URL is a `-P` PDP (same API as the URL resolver)
+2. **Shopify product JSON** (`.js`) for official brand `/products/{handle}` URLs
+3. **Known list prices** in `scripts/data/known-list-prices.json` when neither feed matches
+4. Keep the existing catalog selling price and set `discountPercent: 0` / `promo_codes: []`
+
+A `% off` badge is emitted only when `list_price > price` (a real sale) or a promo is marked `verified`. The production cron does not persist mock price drops.
 
 Generators prefer official pack shots from `scripts/lib/catalog-media.mjs` (and `scripts/data/real-product-images.json` when present) instead of inventing Unsplash URLs. Product links prefer a verified Sephora/Ulta/brand PDP; SQL fallbacks stay on Sephora/Ulta as a path (no `?`). The Worker emits `search?keyword=` / Ulta `search?search=` only when the stored URL is still fake or missing.
 
@@ -180,4 +208,4 @@ Generators prefer official pack shots from `scripts/lib/catalog-media.mjs` (and 
 
 Send `X-Device-Id` on every call.
 
-Promo codes in the seed catalog are **samples** for the mock feed, not guaranteed retailer coupons.
+Promo codes are shown only when a **verified** retailer/brand promo exists. Seed codes such as `RARE10` / `SOL20` are not real and are stripped. A `% off` badge appears only when `list_price` is higher than the current selling `price` (or a promo is marked `verified: true`).

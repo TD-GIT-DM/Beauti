@@ -61,6 +61,11 @@ export function ProductPage() {
           <h1>{product.name}</h1>
           <div className="price-row">
             <span className="price">{formatPrice(product.price, product.currency)}</span>
+            {product.listPrice && product.listPrice > product.price ? (
+              <span className="promo" style={{ textDecoration: "line-through", opacity: 0.7 }}>
+                {formatPrice(product.listPrice, product.currency)}
+              </span>
+            ) : null}
             <span className={`stock ${product.availability === "out_of_stock" ? "out" : product.availability}`}>
               {stockLabel(product)}
             </span>

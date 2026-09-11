@@ -42,7 +42,7 @@ export function HomePage() {
   if (loading) {
     return (
       <main id="main" className="page">
-        <EmptyState title="Preparing the edit" body="Loading the strongest discounts…" />
+        <EmptyState title="Preparing the edit" body="Loading real markdowns and honest prices…" />
       </main>
     );
   }
@@ -51,8 +51,8 @@ export function HomePage() {
     return (
       <main id="main" className="page">
         <EmptyState
-          title="No discounts yet"
-          body="The catalog is up — search shades and treatments while deals refresh."
+          title="Catalog is quiet"
+          body="The vault is up — search shades and treatments while we look for real markdowns."
           action={{ to: "/search", label: "Search the vault" }}
         />
       </main>
@@ -62,7 +62,7 @@ export function HomePage() {
   return (
     <main id="main">
       <DealsHighlight products={deals} />
-      <h1 className="sr-only">Top five beauty deals by discount</h1>
+      <h1 className="sr-only">Top five beauty picks — real discounts, then honest best prices</h1>
       <div className="snap-catalog" aria-label="Top five deals">
         {deals.map((product, index) => (
           <section className="snap-item" key={product.id} aria-label={`${product.brand} ${product.name}`}>
@@ -81,8 +81,8 @@ export function HomePage() {
             <p className="brand-kicker">The vault</p>
             <h2 className="page-title">One hundred shades deeper</h2>
             <p className="lede">
-              Those five are the sharpest discounts right now. Search lipstick, foundation shades, skincare, fragrance,
-              hair, nails, and tools — or start with a color.
+              Those five are live retailer markdowns when they exist, otherwise honest best prices — never a fake
+              percent-off. Search lipstick, foundation shades, skincare, fragrance, hair, nails, and tools.
             </p>
             <Link className="shop-link" to="/search">
               Search the catalog

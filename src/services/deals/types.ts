@@ -4,6 +4,7 @@ export interface PromoCode {
   code: string;
   label: string;
   discountPercent?: number;
+  verified?: boolean;
 }
 
 /** Normalized deal snapshot returned by any retailer / affiliate feed. */
@@ -22,6 +23,7 @@ export interface CatalogProduct {
   name: string;
   brand: string;
   price: number;
+  listPrice?: number | null;
   currency: string;
   promoCodes: PromoCode[];
   dealScore: number;

@@ -1,5 +1,6 @@
--- Seed ~18 editorial beauty products. Promo codes are samples for the mock deal feed.
+-- Seed ~18 editorial beauty products. No invented promo codes or fake markdowns.
 -- Images: official brand/retailer pack shots (no URL query strings).
+-- Honest retailer prices / list_price land in 0009_honest_prices.sql.
 
 INSERT OR IGNORE INTO products (
   id, name, brand, description, image_url, price, currency, product_url,
@@ -11,11 +12,11 @@ INSERT OR IGNORE INTO products (
   'Rare Beauty',
   'A weightless liquid blush that melts into a soft, pinched flush. One drop is enough for a lived-in glow that lasts through dinner.',
   'https://cdn.shopify.com/s/files/1/0314/1143/7703/files/ECOMM-SP-LIQUID-BLUSH-DEWY-HOPE.jpg',
-  23.00, 'USD',
+  25.00, 'USD',
   'https://www.sephora.com/product/rare-beauty-by-selena-gomez-soft-pinch-liquid-blush-P97989778',
   '["blush","makeup","clean","vegan","dewy"]',
-  '[{"code":"RARE10","label":"10% off","discountPercent":10}]',
-  86, 'in_stock', NULL, datetime('now'), datetime('now')
+  '[]',
+  40, 'in_stock', NULL, datetime('now'), datetime('now')
 ),
 (
   'ordinary-niacinamide',
@@ -23,11 +24,11 @@ INSERT OR IGNORE INTO products (
   'The Ordinary',
   'A high-strength vitamin and mineral blemish formula. Lightweight, oil-balancing serum for congested or uneven texture.',
   'https://images.unsplash.com/photo-1620916566398-39f1143ab7be',
-  6.50, 'USD',
+  6.00, 'USD',
   'https://theordinary.com/en-us/niacinamide-10-zinc-1-serum-100436.html',
   '["skincare","serum","niacinamide","budget","vegan"]',
-  '[{"code":"GLOW15","label":"15% off sitewide","discountPercent":15}]',
-  91, 'in_stock', NULL, datetime('now'), datetime('now')
+  '[]',
+  44, 'in_stock', NULL, datetime('now'), datetime('now')
 ),
 (
   'sol-de-janeiro-bum-bum',
@@ -38,8 +39,8 @@ INSERT OR IGNORE INTO products (
   48.00, 'USD',
   'https://www.sephora.com/product/brazilian-bum-bum-visibly-firming-refillable-body-cream-P406080',
   '["body","skincare","fragrance","cult"]',
-  '[{"code":"SOL20","label":"20% off body","discountPercent":20}]',
-  94, 'in_stock', NULL, datetime('now'), datetime('now')
+  '[]',
+  32, 'in_stock', NULL, datetime('now'), datetime('now')
 ),
 (
   'laneige-lip-mask',
@@ -50,8 +51,8 @@ INSERT OR IGNORE INTO products (
   24.00, 'USD',
   'https://www.sephora.com/product/lip-sleeping-mask-P420652',
   '["lips","skincare","overnight","k-beauty"]',
-  '[{"code":"KBEAUTY12","label":"12% off","discountPercent":12}]',
-  80, 'in_stock', NULL, datetime('now'), datetime('now')
+  '[]',
+  40, 'in_stock', NULL, datetime('now'), datetime('now')
 ),
 (
   'fenty-gloss-bomb',
@@ -59,11 +60,11 @@ INSERT OR IGNORE INTO products (
   'Fenty Beauty',
   'The original glass-like gloss with shea butter. Shade Fu$$y flatters almost everyone — a high-shine essential.',
   'https://images.pexels.com/photos/2533266/pexels-photo-2533266.jpeg',
-  22.00, 'USD',
+  23.00, 'USD',
   'https://fentybeauty.com/products/gloss-bomb-universal-lip-luminizer',
   '["lips","makeup","gloss","inclusive"]',
   '[]',
-  72, 'in_stock', NULL, datetime('now'), datetime('now')
+  40, 'in_stock', NULL, datetime('now'), datetime('now')
 ),
 (
   'charlotte-pillow-talk',
@@ -71,11 +72,11 @@ INSERT OR IGNORE INTO products (
   'Charlotte Tilbury',
   'The universally flattering rosy-nude lipstick. Creamy, dimensional, and built for that editorial close-up.',
   'https://images.unsplash.com/photo-1596462502278-27bfdc403348',
-  35.00, 'USD',
+  32.00, 'USD',
   'https://www.charlottetilbury.com/us/product/matte-revolution-lipstick-pillow-talk',
   '["lipstick","makeup","nude","iconic"]',
-  '[{"code":"CTILOVE","label":"Complimentary mini","discountPercent":5}]',
-  77, 'limited', NULL, datetime('now'), datetime('now')
+  '[]',
+  36, 'limited', NULL, datetime('now'), datetime('now')
 ),
 (
   'gisou-honey-oil',
@@ -83,11 +84,11 @@ INSERT OR IGNORE INTO products (
   'Gisou',
   'A honey-rich shine oil for glass hair. Smooths frizz without weighing fine strands down. Often sells out in the 50ml.',
   'https://cdn.shopify.com/s/files/1/0361/1987/1619/files/02_HIHO_100ml_PG_PACKSHOT1_D_94c5ae27-3afb-4bb5-80b3-74736ecd6e1f.jpg',
-  46.00, 'USD',
+  41.40, 'USD',
   'https://gisou.com/products/honey-infused-hair-oil',
   '["hair","oil","shine","cult"]',
   '[]',
-  68, 'out_of_stock', 'late September', datetime('now'), datetime('now')
+  50, 'out_of_stock', 'late September', datetime('now'), datetime('now')
 ),
 (
   'rhode-peptide-tint',
@@ -95,11 +96,11 @@ INSERT OR IGNORE INTO products (
   'Rhode',
   'A peptide-cushioned lip tint with a blurred, just-bitten finish. Minimalist formula, maximalist waitlist energy.',
   'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908',
-  26.00, 'USD',
+  20.00, 'USD',
   'https://www.rhodeskin.com/products/peptide-lip-tint',
   '["lips","skincare","tint","cult"]',
   '[]',
-  55, 'out_of_stock', 'unknown / may not return', datetime('now'), datetime('now')
+  40, 'out_of_stock', 'unknown / may not return', datetime('now'), datetime('now')
 ),
 (
   'summer-fridays-butter',
@@ -110,8 +111,8 @@ INSERT OR IGNORE INTO products (
   24.00, 'USD',
   'https://www.sephora.com/product/summer-fridays-lip-butter-balm-P455936',
   '["lips","balm","clean","hydrating"]',
-  '[{"code":"SFRI15","label":"15% off","discountPercent":15}]',
-  84, 'in_stock', NULL, datetime('now'), datetime('now')
+  '[]',
+  40, 'in_stock', NULL, datetime('now'), datetime('now')
 ),
 (
   'tatcha-dewy-skin',
@@ -122,8 +123,8 @@ INSERT OR IGNORE INTO products (
   72.00, 'USD',
   'https://www.tatcha.com/product/dewy-skin-cream.html',
   '["skincare","moisturizer","luxury","dewy"]',
-  '[{"code":"TATCHA10","label":"10% off first order","discountPercent":10}]',
-  75, 'limited', NULL, datetime('now'), datetime('now')
+  '[]',
+  32, 'limited', NULL, datetime('now'), datetime('now')
 ),
 (
   'byredo-gypsy-water',
@@ -134,8 +135,8 @@ INSERT OR IGNORE INTO products (
   196.00, 'USD',
   'https://www.byredo.com/us_en/gypsy-water-eau-de-parfum',
   '["fragrance","woody","luxury","unisex"]',
-  '[{"code":"SCENT8","label":"8% off fragrance","discountPercent":8}]',
-  70, 'in_stock', NULL, datetime('now'), datetime('now')
+  '[]',
+  32, 'in_stock', NULL, datetime('now'), datetime('now')
 ),
 (
   'tower28-sos',
@@ -146,8 +147,8 @@ INSERT OR IGNORE INTO products (
   28.00, 'USD',
   'https://tower28beauty.com/products/sos-save-our-skin-rescue-spray',
   '["skincare","sensitive","clean","spray"]',
-  '[{"code":"T2805","label":"Buy more, save 5%","discountPercent":5}]',
-  73, 'in_stock', NULL, datetime('now'), datetime('now')
+  '[]',
+  40, 'in_stock', NULL, datetime('now'), datetime('now')
 ),
 (
   'saie-slip-tint',
@@ -155,11 +156,11 @@ INSERT OR IGNORE INTO products (
   'Saie',
   'A glowy, skin-like tint with broad-spectrum SPF 35. Sheer enough for no-makeup makeup days.',
   'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2',
-  36.00, 'USD',
+  38.00, 'USD',
   'https://saiehello.com/products/slip-tint',
   '["makeup","skincare","spf","clean","glow"]',
   '[]',
-  66, 'in_stock', NULL, datetime('now'), datetime('now')
+  36, 'in_stock', NULL, datetime('now'), datetime('now')
 ),
 (
   'drunk-elephant-protini',
@@ -170,8 +171,8 @@ INSERT OR IGNORE INTO products (
   68.00, 'USD',
   'https://www.sephora.com/product/protini-tm-polypeptide-cream-P427421',
   '["skincare","moisturizer","peptides","cult"]',
-  '[{"code":"DE15","label":"15% off","discountPercent":15}]',
-  88, 'in_stock', NULL, datetime('now'), datetime('now')
+  '[]',
+  32, 'in_stock', NULL, datetime('now'), datetime('now')
 ),
 (
   'glossier-cloud-paint',
@@ -179,11 +180,11 @@ INSERT OR IGNORE INTO products (
   'Glossier',
   'A gel-cream blush that sheers out like a watercolor. Shade Dusk is the cool-girl terracotta.',
   'https://cdn.shopify.com/s/files/1/0627/9164/7477/files/glossier-cloud-paint-beam-carousel-01.png',
-  20.00, 'USD',
+  24.00, 'USD',
   'https://www.glossier.com/products/cloud-paint',
   '["blush","makeup","dewy","clean"]',
-  '[{"code":"GLOSS10","label":"10% off","discountPercent":10}]',
-  81, 'in_stock', NULL, datetime('now'), datetime('now')
+  '[]',
+  40, 'in_stock', NULL, datetime('now'), datetime('now')
 ),
 (
   'dior-sauvage',
@@ -195,7 +196,7 @@ INSERT OR IGNORE INTO products (
   'https://www.dior.com/en_us/beauty/products/sauvage-eau-de-parfum',
   '["fragrance","aromatic","luxury","unisex"]',
   '[]',
-  60, 'in_stock', NULL, datetime('now'), datetime('now')
+  32, 'in_stock', NULL, datetime('now'), datetime('now')
 ),
 (
   'la-mer-cream',
@@ -207,7 +208,7 @@ INSERT OR IGNORE INTO products (
   'https://www.cremedelamer.com/product/17766/80880/moisturizers/creme-de-la-mer',
   '["skincare","moisturizer","luxury","iconic"]',
   '[]',
-  48, 'out_of_stock', 'mid-October to early November', datetime('now'), datetime('now')
+  32, 'out_of_stock', 'mid-October to early November', datetime('now'), datetime('now')
 ),
 (
   'nars-orgasm',
@@ -215,38 +216,29 @@ INSERT OR IGNORE INTO products (
   'NARS',
   'The golden-pink blush that defined a generation of cheekbones. Peachy, softly shimmering, never frosty.',
   'https://images.unsplash.com/photo-1610992015732-2449b76344bc',
-  32.00, 'USD',
+  36.00, 'USD',
   'https://www.narscosmetics.com/USA/orgasm-blush/999NAC0000063.html',
   '["blush","makeup","shimmer","iconic"]',
-  '[{"code":"NARS12","label":"12% off color","discountPercent":12}]',
-  79, 'in_stock', NULL, datetime('now'), datetime('now')
+  '[]',
+  36, 'in_stock', NULL, datetime('now'), datetime('now')
 );
 
 INSERT OR IGNORE INTO price_history (product_id, price, recorded_at) VALUES
-  ('rare-beauty-soft-pinch', 24.00, datetime('now', '-12 days')),
-  ('rare-beauty-soft-pinch', 23.00, datetime('now')),
-  ('ordinary-niacinamide', 7.20, datetime('now', '-9 days')),
-  ('ordinary-niacinamide', 6.50, datetime('now')),
-  ('sol-de-janeiro-bum-bum', 52.00, datetime('now', '-18 days')),
+  ('rare-beauty-soft-pinch', 25.00, datetime('now')),
+  ('ordinary-niacinamide', 6.00, datetime('now')),
   ('sol-de-janeiro-bum-bum', 48.00, datetime('now')),
   ('laneige-lip-mask', 24.00, datetime('now')),
-  ('fenty-gloss-bomb', 22.00, datetime('now')),
-  ('charlotte-pillow-talk', 38.00, datetime('now', '-20 days')),
-  ('charlotte-pillow-talk', 35.00, datetime('now')),
-  ('gisou-honey-oil', 46.00, datetime('now')),
-  ('rhode-peptide-tint', 26.00, datetime('now')),
-  ('summer-fridays-butter', 26.00, datetime('now', '-6 days')),
+  ('fenty-gloss-bomb', 23.00, datetime('now')),
+  ('charlotte-pillow-talk', 32.00, datetime('now')),
+  ('gisou-honey-oil', 41.40, datetime('now')),
+  ('rhode-peptide-tint', 20.00, datetime('now')),
   ('summer-fridays-butter', 24.00, datetime('now')),
   ('tatcha-dewy-skin', 72.00, datetime('now')),
-  ('byredo-gypsy-water', 210.00, datetime('now', '-30 days')),
   ('byredo-gypsy-water', 196.00, datetime('now')),
   ('tower28-sos', 28.00, datetime('now')),
-  ('saie-slip-tint', 36.00, datetime('now')),
-  ('drunk-elephant-protini', 72.00, datetime('now', '-14 days')),
+  ('saie-slip-tint', 38.00, datetime('now')),
   ('drunk-elephant-protini', 68.00, datetime('now')),
-  ('glossier-cloud-paint', 22.00, datetime('now', '-8 days')),
-  ('glossier-cloud-paint', 20.00, datetime('now')),
+  ('glossier-cloud-paint', 24.00, datetime('now')),
   ('dior-sauvage', 135.00, datetime('now')),
   ('la-mer-cream', 190.00, datetime('now')),
-  ('nars-orgasm', 34.00, datetime('now', '-11 days')),
-  ('nars-orgasm', 32.00, datetime('now'));
+  ('nars-orgasm', 36.00, datetime('now'));
