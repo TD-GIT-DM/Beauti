@@ -89,8 +89,9 @@ function scentTags({ notes = [], kind = "edp", gender = "unisex", extra = [], br
   ]);
 }
 
-function promo(code, label, discountPercent) {
-  return [{ code, label, discountPercent }];
+function promo(_code, _label, _discountPercent) {
+  // Do not invent retailer coupons. Real markdowns come from 0009 price sync.
+  return [];
 }
 
 function p(id, name, brand, description, imageUrl, price, tags, promoCodes, dealScore, availability = "in_stock", restock = null) {
@@ -1637,7 +1638,7 @@ const historyChunks = [];
 for (let i = 0; i < products.length; i += 40) {
   const slice = products.slice(i, i + 40);
   const rows = slice.flatMap((item) => {
-    const peakBump = item.promoCodes[0]?.discountPercent >= 30 ? item.price * 1.12 : item.price * 1.04;
+    const peakBump = item.price;
     return [
       `  (${sqlStr(item.id)}, ${peakBump.toFixed(2)}, datetime('now', '-14 days'))`,
       `  (${sqlStr(item.id)}, ${item.price.toFixed(2)}, datetime('now'))`,

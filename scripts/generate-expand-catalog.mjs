@@ -359,8 +359,9 @@ const products = [
     IMG.hair, 169, ["tools", "hair", "hot-brush", "smoothing", "heat", "luxury"], promo("GHD8", "8% off", 8), 64),
 ];
 
-function promo(code, label, discountPercent) {
-  return [{ code, label, discountPercent }];
+function promo(_code, _label, _discountPercent) {
+  // Do not invent retailer coupons. Real markdowns come from 0009 price sync.
+  return [];
 }
 
 function p(id, name, brand, description, imageUrl, price, tags, promoCodes, dealScore, availability = "in_stock", restock = null) {
@@ -402,7 +403,7 @@ ${products.slice(i, i + 20).map(productRow).join(",\n")};`);
 }
 
 const history = products.flatMap((item) => {
-  const peakBump = item.promoCodes[0]?.discountPercent >= 30 ? item.price * 1.12 : item.price * 1.04;
+  const peakBump = item.price;
   const lines = [
     `  (${sqlStr(item.id)}, ${peakBump.toFixed(2)}, datetime('now', '-14 days'))`,
     `  (${sqlStr(item.id)}, ${item.price.toFixed(2)}, datetime('now'))`,

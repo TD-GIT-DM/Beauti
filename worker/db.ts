@@ -9,6 +9,7 @@ export interface ProductRecord {
   description: string;
   imageUrl: string;
   price: number;
+  listPrice: number | null;
   currency: string;
   productUrl: string;
   tags: string[];
@@ -28,6 +29,7 @@ export interface ProductRow {
   description: string;
   image_url: string;
   price: number;
+  list_price?: number | null;
   currency: string;
   product_url: string;
   tags: string;
@@ -58,6 +60,7 @@ export function mapProduct(
     description: row.description,
     imageUrl: row.image_url,
     price: row.price,
+    listPrice: row.list_price != null && row.list_price > 0 ? row.list_price : null,
     currency: row.currency,
     productUrl: resolveProductUrl(row.product_url, row.brand, row.name),
     tags: parseJson<string[]>(row.tags, []),
@@ -103,6 +106,7 @@ export function withDiscount(
       product.price,
       product.priceHistory,
       peakHistoryPrice,
+      product.listPrice,
     ),
   };
 }

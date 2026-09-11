@@ -1,0 +1,20 @@
+{
+  "comment": "Curated US list / selling prices when Sephora catalog JSON or Shopify product JSON is unavailable. Amounts are full-size MSRP in USD. Used only as a fallback — live catalog JSON wins.",
+  "prices": {
+    "ordinary-niacinamide": { "price": 6.5, "listPrice": 6.5, "source": "known-msrp:theordinary" },
+    "rhode-peptide-tint": { "price": 20.0, "listPrice": 20.0, "source": "known-msrp:rhode" },
+    "saie-slip-tint": { "price": 38.0, "listPrice": 38.0, "source": "known-msrp:saie" },
+    "gisou-honey-oil": { "price": 50.0, "listPrice": 50.0, "source": "known-msrp:gisou-50ml" },
+    "tatcha-dewy-skin": { "price": 72.0, "listPrice": 72.0, "source": "known-msrp:tatcha" },
+    "byredo-gypsy-water": { "price": 210.0, "listPrice": 210.0, "source": "known-msrp:byredo-50ml" },
+    "la-mer-cream": { "price": 210.0, "listPrice": 210.0, "source": "known-msrp:lamer-30ml" },
+    "dior-sauvage": { "price": 135.0, "listPrice": 135.0, "source": "known-msrp:dior-60ml" },
+    "glossier-cloud-paint": { "price": 22.0, "listPrice": 22.0, "source": "known-msrp:glossier" },
+    "fenty-gloss-bomb": { "price": 21.0, "listPrice": 21.0, "source": "known-msrp:fenty" },
+    "charlotte-pillow-talk": { "price": 38.0, "listPrice": 38.0, "source": "known-msrp:ct" },
+    "nars-orgasm": { "price": 34.0, "listPrice": 34.0, "source": "known-msrp:nars" },
+    "tower28-sos": { "price": 28.0, "listPrice": 28.0, "source": "known-msrp:tower28" },
+    "beautyblender-original": { "price": 20.0, "listPrice": 20.0, "source": "known-msrp:beautyblender" },
+    "amouage-interlude-man": { "price": 340.0, "listPrice": 340.0, "source": "known-msrp:amouage-100ml" }
+  }
+}

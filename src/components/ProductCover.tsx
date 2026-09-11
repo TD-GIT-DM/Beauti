@@ -61,7 +61,7 @@ export function ProductCover({
       <div className="cover-body">
         {dealRank ? (
           <div className="brand-kicker">
-            Top deal {String(dealRank).padStart(2, "0")}
+            {discount > 0 ? "Top deal" : "Best price"} {String(dealRank).padStart(2, "0")}
             {dealTotal ? ` of ${dealTotal}` : ""}
           </div>
         ) : null}

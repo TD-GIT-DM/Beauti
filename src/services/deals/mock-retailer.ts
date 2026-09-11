@@ -1,12 +1,5 @@
+import { honestDealScore } from "../../lib/discount";
 import type { Availability, CatalogProduct, DealProvider, DealSnapshot, PromoCode } from "./types";
-
-const PROMO_POOL: PromoCode[][] = [
-  [{ code: "BEAUTI15", label: "15% off with Beauti", discountPercent: 15 }],
-  [{ code: "GLOW20", label: "20% off glow picks", discountPercent: 20 }],
-  [{ code: "GOLD10", label: "10% off", discountPercent: 10 }],
-  [{ code: "REST20", label: "Restock welcome 20%", discountPercent: 20 }],
-  [],
-];
 
 const RESTOCK_COPY = [
   "this week",
@@ -37,27 +30,33 @@ function roundMoney(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-function scoreDeal(price: number, previous: number, promos: PromoCode[], availability: Availability): number {
-  const promo = Math.max(0, ...promos.map((p) => p.discountPercent ?? 0));
-  const drop = previous > 0 ? Math.max(0, ((previous - price) / previous) * 100) : 0;
-  let score = 40 + promo * 1.6 + drop * 2.2;
-  if (availability === "limited") score -= 8;
-  if (availability === "out_of_stock") score -= 22;
-  if (price < 30) score += 6;
-  return Math.max(12, Math.min(99, Math.round(score)));
+function identitySnapshot(product: CatalogProduct): DealSnapshot {
+  return {
+    productId: product.id,
+    price: product.price,
+    currency: product.currency,
+    promoCodes: product.promoCodes,
+    dealScore: product.dealScore,
+    availability: product.availability,
+    restockEstimate: product.restockEstimate,
+  };
 }
 
 /**
- * Mock retailer / affiliate feed.
+ * Demo retailer feed.
  *
- * Swap this class for Impact, CJ, ShareASale, or a licensed product feed later.
- * It never fetches third-party HTML; updates are simulated against the seeded catalog.
+ * Production cron must not invent prices or promo codes — snapshots match the
+ * honest catalog. Availability can jitter slightly for local demos; price and
+ * promo_codes stay exactly as stored. Swap this class for a licensed affiliate
+ * feed later. Never scrape storefront HTML.
  */
 export class MockRetailerFeed implements DealProvider {
   private readonly scanIndex: number;
+  private readonly mutateAvailability: boolean;
 
-  constructor(scanIndex: number) {
+  constructor(scanIndex: number, mutateAvailability = false) {
     this.scanIndex = scanIndex;
+    this.mutateAvailability = mutateAvailability;
   }
 
   async fetchDeals(catalog: CatalogProduct[]): Promise<DealSnapshot[]> {
@@ -65,10 +64,11 @@ export class MockRetailerFeed implements DealProvider {
   }
 
   private snapshotFor(product: CatalogProduct): DealSnapshot {
-    const seed = hash(`${product.id}:${this.scanIndex}`);
-    const roll = unit(seed);
-    const roll2 = unit(hash(`${product.id}:avail:${this.scanIndex}`));
+    const snap = identitySnapshot(product);
+    if (!this.mutateAvailability) return snap;
 
+    const seed = hash(`${product.id}:avail:${this.scanIndex}`);
+    const roll2 = unit(seed);
     let availability: Availability = product.availability;
     let restockEstimate = product.restockEstimate;
 
@@ -92,39 +92,16 @@ export class MockRetailerFeed implements DealProvider {
       restockEstimate = pick(seed + 7, RESTOCK_COPY);
     }
 
-    let price = product.price;
-    if (roll < 0.22) {
-      const dropPct = 0.06 + unit(seed + 11) * 0.14;
-      price = roundMoney(product.price * (1 - dropPct));
-    } else if (roll > 0.88) {
-      price = roundMoney(product.price * (1 + 0.03 + unit(seed + 19) * 0.04));
-    } else {
-      const jitter = (unit(seed + 23) - 0.5) * 0.03;
-      price = roundMoney(product.price * (1 + jitter));
-    }
-    price = Math.max(4, price);
-
-    const promoRoll = unit(hash(`${product.id}:promo:${this.scanIndex}`));
-    const promoCodes =
-      promoRoll < 0.55
-        ? pick(seed + 41, PROMO_POOL.filter((p) => p.length > 0))
-        : product.promoCodes.length && promoRoll < 0.8
-          ? product.promoCodes
-          : [];
-
     return {
-      productId: product.id,
-      price,
-      currency: product.currency,
-      promoCodes,
-      dealScore: scoreDeal(price, product.price, promoCodes, availability),
+      ...snap,
       availability,
       restockEstimate,
+      dealScore: honestDealScore(product.price, product.listPrice ?? product.price, availability),
     };
   }
 }
 
-/** Apply a guaranteed restock / drop on top of the mock feed for demos. */
+/** Apply a guaranteed restock / drop on top of the catalog for demos only. */
 export function applyForcedEvents(
   catalog: CatalogProduct[],
   snapshots: DealSnapshot[],
@@ -138,10 +115,7 @@ export function applyForcedEvents(
     if (snap) {
       snap.availability = "in_stock";
       snap.restockEstimate = null;
-      snap.dealScore = Math.min(99, snap.dealScore + 12);
-      if (!snap.promoCodes.length) {
-        snap.promoCodes = [{ code: "REST20", label: "Restock welcome 20%", discountPercent: 20 }];
-      }
+      snap.dealScore = honestDealScore(snap.price, oos.listPrice ?? oos.price, "in_stock");
     }
   }
 
@@ -150,11 +124,10 @@ export function applyForcedEvents(
       catalog.find((p) => p.availability === "in_stock" && p.price > 10) ?? catalog[0];
     const snap = byId.get(inStock.id);
     if (snap) {
+      const list = inStock.listPrice && inStock.listPrice > inStock.price ? inStock.listPrice : inStock.price;
       snap.price = roundMoney(inStock.price * 0.82);
-      snap.dealScore = Math.min(99, Math.max(snap.dealScore, 90));
-      snap.promoCodes = snap.promoCodes.length
-        ? snap.promoCodes
-        : [{ code: "DROP18", label: "18% price drop", discountPercent: 18 }];
+      snap.promoCodes = [] as PromoCode[];
+      snap.dealScore = honestDealScore(snap.price, list, snap.availability);
     }
   }
 

@@ -19,6 +19,7 @@ logs
 
 # Catalog resolver working cache (full Sephora search payloads)
 scripts/data/real-product-urls.cache.json
+scripts/data/honest-prices.cache.json
 scripts/__pycache__/
 
 # Editor
