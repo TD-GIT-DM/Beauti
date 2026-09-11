@@ -25,7 +25,7 @@ migrations_dir = "migrations"
 binding = "DEALS_CACHE"
 id = "80ead3ba6f2b4678956c3cac9c8bebc8"
 
-# Deal scan + wishlist alert check every 15 minutes (UTC)
+# Catalog availability + price refresh + wishlist restock alerts every 15 minutes (UTC)
 [triggers]
 crons = ["*/15 * * * *"]
 
