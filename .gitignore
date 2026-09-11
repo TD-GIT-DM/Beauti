@@ -17,6 +17,10 @@ logs
 *.log
 .DS_Store
 
+# Catalog resolver working cache (full Sephora search payloads)
+scripts/data/real-product-urls.cache.json
+scripts/__pycache__/
+
 # Editor
 .vscode/*
 !.vscode/extensions.json

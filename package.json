@@ -15,6 +15,9 @@
     "catalog:generate:0006": "node scripts/generate-perfume-makeup-expand.mjs",
     "catalog:resolve-images": "python3 scripts/resolve-real-product-images.py",
     "catalog:generate:0007": "node scripts/generate-real-product-images.mjs",
+    "catalog:resolve-urls": "python3 scripts/resolve-real-product-urls.py",
+    "catalog:generate:0008": "node scripts/generate-real-product-urls.mjs",
+    "catalog:test-urls": "node scripts/test-product-url.mjs",
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {

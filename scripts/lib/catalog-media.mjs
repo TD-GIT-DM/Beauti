@@ -6,8 +6,10 @@
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { isVerifiedStoredPdp, retailerSearchPathUrl, stripUrlQuery } from "./product-url.mjs";
 
 const overlayPath = fileURLToPath(new URL("../data/real-product-images.json", import.meta.url));
+const urlOverlayPath = fileURLToPath(new URL("../data/real-product-urls.json", import.meta.url));
 
 function loadOverlay() {
   try {
@@ -17,7 +19,16 @@ function loadOverlay() {
   }
 }
 
+function loadUrlOverlay() {
+  try {
+    return JSON.parse(readFileSync(urlOverlayPath, "utf8"));
+  } catch {
+    return { products: {} };
+  }
+}
+
 const overlay = loadOverlay();
+const urlOverlay = loadUrlOverlay();
 
 /** Sephora keyword search as a clean path (no `?`) so SQL migrations stay db.exec-safe. */
 export function sephoraSearchUrl(brand, name) {
@@ -34,20 +45,20 @@ export function sephoraSearchUrl(brand, name) {
 
 /** Known official / retailer product pages (no query strings). */
 export const CURATED_LINKS = {
-  "rare-beauty-soft-pinch": "https://www.sephora.com/product/soft-pinch-liquid-blush-P97989780",
+  "rare-beauty-soft-pinch": "https://www.sephora.com/product/rare-beauty-by-selena-gomez-soft-pinch-liquid-blush-P97989778",
   "ordinary-niacinamide": "https://theordinary.com/en-us/niacinamide-10-zinc-1-serum-100436.html",
-  "sol-de-janeiro-bum-bum": "https://www.sephora.com/product/brazilian-bum-bum-cream-P406140",
+  "sol-de-janeiro-bum-bum": "https://www.sephora.com/product/brazilian-bum-bum-visibly-firming-refillable-body-cream-P406080",
   "laneige-lip-mask": "https://www.sephora.com/product/lip-sleeping-mask-P420652",
   "fenty-gloss-bomb": "https://fentybeauty.com/products/gloss-bomb-universal-lip-luminizer",
   "charlotte-pillow-talk": "https://www.charlottetilbury.com/us/product/matte-revolution-lipstick-pillow-talk",
   "gisou-honey-oil": "https://gisou.com/products/honey-infused-hair-oil",
   "rhode-peptide-tint": "https://www.rhodeskin.com/products/peptide-lip-treatment",
-  "summer-fridays-butter": "https://www.sephora.com/product/lip-butter-balm-P45590063",
+  "summer-fridays-butter": "https://www.sephora.com/product/summer-fridays-lip-butter-balm-P455936",
   "tatcha-dewy-skin": "https://www.tatcha.com/product/dewy-skin-cream.html",
   "byredo-gypsy-water": "https://www.byredo.com/us_en/gypsy-water-eau-de-parfum",
   "tower28-sos": "https://tower28beauty.com/products/sos-daily-rescue-facial-spray",
   "saie-slip-tint": "https://saiehello.com/products/slip-tint-tinted-moisturizer-spf-35",
-  "drunk-elephant-protini": "https://www.sephora.com/product/protini-tm-polypeptide-cream-P427419",
+  "drunk-elephant-protini": "https://www.sephora.com/product/protini-tm-polypeptide-cream-P427421",
   "glossier-cloud-paint": "https://www.glossier.com/products/cloud-paint",
   "dior-sauvage": "https://www.dior.com/en_us/beauty/products/sauvage-eau-de-parfum",
   "la-mer-cream": "https://www.cremedelamer.com/product/17766/80880/moisturizers/creme-de-la-mer",
@@ -93,9 +104,19 @@ export function imageFor(id, fallback) {
 }
 
 export function productUrlFor(item) {
+  const fromUrlOverlay = urlOverlay.products?.[item.id];
+  if (fromUrlOverlay?.productUrl) {
+    const link = stripUrlQuery(fromUrlOverlay.productUrl);
+    if (link && !link.includes("?") && (isVerifiedStoredPdp(link) || /^https:\/\/www\.(sephora|ulta)\.com\//i.test(link))) {
+      return link;
+    }
+  }
   const fromOverlay = overlayEntry(item.id);
   if (fromOverlay?.productUrl && !String(fromOverlay.productUrl).includes("?")) {
-    return fromOverlay.productUrl;
+    const link = String(fromOverlay.productUrl);
+    if (isVerifiedStoredPdp(link) || /^https:\/\/www\.sephora\.com\/search\//i.test(link)) {
+      return link;
+    }
   }
   if (CURATED_LINKS[item.id] && !CURATED_LINKS[item.id].includes("?")) {
     return CURATED_LINKS[item.id];
@@ -103,7 +124,7 @@ export function productUrlFor(item) {
   if (item.productUrl && !String(item.productUrl).includes("?") && !String(item.productUrl).includes(`/product/${item.id}`)) {
     return item.productUrl;
   }
-  return sephoraSearchUrl(item.brand, item.name);
+  return retailerSearchPathUrl(item.brand, item.name);
 }
 
 export function isPlaceholderImage(id, url) {

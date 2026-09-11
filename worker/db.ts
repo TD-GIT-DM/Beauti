@@ -1,4 +1,5 @@
 import { productDiscountPercent } from "../src/lib/discount";
+import { resolveProductUrl } from "../src/lib/product-url";
 import type { Availability, PromoCode } from "../src/services/deals";
 
 export interface ProductRecord {
@@ -44,21 +45,6 @@ function parseJson<T>(raw: string, fallback: T): T {
   } catch {
     return fallback;
   }
-}
-
-/** Prefer real PDPs. Rewrite fake Sephora slugs / Google stopgaps to Sephora keyword search. */
-function resolveProductUrl(url: string, brand: string, name: string): string {
-  const trimmed = (url || "").trim();
-  const query = encodeURIComponent(`${brand} ${name}`.trim());
-  const sephoraSearch = `https://www.sephora.com/search?keyword=${query}`;
-  const fakeSephora =
-    /^https:\/\/www\.sephora\.com\/product\/[^/?#]+$/i.test(trimmed) &&
-    !/-P\d+/i.test(trimmed);
-  const googleStopgap = /^https:\/\/www\.google\.com\/search\?/i.test(trimmed);
-  if (fakeSephora || googleStopgap || !trimmed) {
-    return sephoraSearch;
-  }
-  return trimmed;
 }
 
 export function mapProduct(

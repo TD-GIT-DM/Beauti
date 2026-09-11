@@ -12,7 +12,7 @@ INSERT OR IGNORE INTO products (
   'A weightless liquid blush that melts into a soft, pinched flush. One drop is enough for a lived-in glow that lasts through dinner.',
   'https://cdn.shopify.com/s/files/1/0314/1143/7703/files/ECOMM-SP-LIQUID-BLUSH-DEWY-HOPE.jpg',
   23.00, 'USD',
-  'https://www.sephora.com/product/soft-pinch-liquid-blush-P97989780',
+  'https://www.sephora.com/product/rare-beauty-by-selena-gomez-soft-pinch-liquid-blush-P97989778',
   '["blush","makeup","clean","vegan","dewy"]',
   '[{"code":"RARE10","label":"10% off","discountPercent":10}]',
   86, 'in_stock', NULL, datetime('now'), datetime('now')
@@ -36,7 +36,7 @@ INSERT OR IGNORE INTO products (
   'The cult body cream with a cheirosa 62 scent — pistachio, salted caramel, and warm vanilla. Fast-absorbing, visibly firming.',
   'https://cdn.shopify.com/s/files/1/2826/2250/files/01_SDJ_PPage_DTC_BB_BC_240ML_OVERHEAD_RGB_1452X1452_cb5b3d96-578a-4163-8c34-8c815fc465eb.jpg',
   48.00, 'USD',
-  'https://www.sephora.com/product/brazilian-bum-bum-cream-P406140',
+  'https://www.sephora.com/product/brazilian-bum-bum-visibly-firming-refillable-body-cream-P406080',
   '["body","skincare","fragrance","cult"]',
   '[{"code":"SOL20","label":"20% off body","discountPercent":20}]',
   94, 'in_stock', NULL, datetime('now'), datetime('now')
@@ -108,7 +108,7 @@ INSERT OR IGNORE INTO products (
   'A rich, buttery balm that reads as a sheer wash of color. Vanilla beige remains the quiet luxury shade.',
   'https://cdn.shopify.com/s/files/1/2382/2877/files/Square-Lip-Butter-Balm-Vanilla-Main.jpg',
   24.00, 'USD',
-  'https://www.sephora.com/product/lip-butter-balm-P45590063',
+  'https://www.sephora.com/product/summer-fridays-lip-butter-balm-P455936',
   '["lips","balm","clean","hydrating"]',
   '[{"code":"SFRI15","label":"15% off","discountPercent":15}]',
   84, 'in_stock', NULL, datetime('now'), datetime('now')
@@ -168,7 +168,7 @@ INSERT OR IGNORE INTO products (
   'A protein-peptide moisturizer that firms the look of skin overnight. The pink jar that started a thousand routines.',
   'https://images.unsplash.com/photo-1571781926291-c477ebfd024b',
   68.00, 'USD',
-  'https://www.sephora.com/product/protini-tm-polypeptide-cream-P427419',
+  'https://www.sephora.com/product/protini-tm-polypeptide-cream-P427421',
   '["skincare","moisturizer","peptides","cult"]',
   '[{"code":"DE15","label":"15% off","discountPercent":15}]',
   88, 'in_stock', NULL, datetime('now'), datetime('now')

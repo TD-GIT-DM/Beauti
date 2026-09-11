@@ -33,6 +33,8 @@ Open [http://localhost:5173](http://localhost:5173).
 | `npm run db:migrate:remote` | Apply D1 migrations to production D1 |
 | `npm run cf-typegen` | Regenerate `worker-configuration.d.ts` from `wrangler.toml` |
 | `npm run catalog:resolve-images` | Refresh official pack-shot map + `0007_real_product_images.sql` |
+| `npm run catalog:resolve-urls` | Sephora catalog lookup + HEAD checks → `scripts/data/real-product-urls.json` |
+| `npm run catalog:generate:0008` | Write `0008_real_product_urls.sql` from that JSON |
 
 The Worker config lives in **`wrangler.toml`** (Wrangler also accepts `wrangler.jsonc`; this project uses TOML). Bindings:
 
@@ -119,13 +121,36 @@ npm run db:migrate:remote    # production D1 — applies pending files in migrat
 | `0005_lipstick_images.sql` | Lipstick photo fixes |
 | `0006_perfume_makeup_expand.sql` | Deep perfume aisle + full-shade lipstick/gloss/liner, blush, foundation/concealer, eyes, nails, serums (~450 SKUs). Images have **no `?` query strings**. Inserts are batched so each statement stays under D1’s 100 KB limit. |
 | `0007_real_product_images.sql` | Official brand/retailer **pack shots** (~210 verified HTTPS URLs, no `?`) + real `product_url`s (brand/Shopify page, or a Sephora `/search/{slug}` path). The other ~370 SKUs keep the best pack-like photo and gain an `image-placeholder` tag. Do **not** `db.exec` this from `ensureCatalog` — apply with Wrangler / MCP batch updates. |
+| `0008_real_product_urls.sql` | Replaces Google / fake `sephora.com/product/{beauti-id}` links with **verified retailer or brand PDPs** (**441 / 580**: 367 Sephora `-P` pages, 74 official brand PDPs). The other **139** SKUs get a path-only Sephora `/search/{slug}` or Ulta `/brand/{brand}` URL (no `?` in SQL). Do **not** `db.exec` this from `ensureCatalog`. |
 
 `INSERT OR IGNORE` so re-applying is safe on an already-seeded database.
 
+### Apply `0008` to production D1
+
+`ensureCatalog` never runs `0008` (same 100 KB / statement-volume limit that 500s 0004/0006/0007). Apply the file with Wrangler or Cloudflare MCP.
+
+**Wrangler (preferred):**
+
 ```bash
-npm run db:migrate:remote    # includes 0004 + 0006
+npm run db:migrate:remote    # CI=1 wrangler d1 migrations apply beauti --remote
+# includes any pending files in migrations/, including 0008_real_product_urls.sql
 npm run deploy               # also runs remote migrate, then wrangler deploy
 ```
+
+Confirm with Wrangler:
+
+```bash
+npx wrangler d1 migrations list beauti --remote
+```
+
+**Cloudflare MCP** (`d1_database_query` on the Bindings server): database id `f83c9aae-86c4-457a-882a-fd86d1fb85bb` (see `wrangler.toml`). Run the batched `UPDATE` statements from `migrations/0008_real_product_urls.sql` in chunks (do not paste the whole file into one `db.exec`). Bind parameters if a URL ever contains `?` — this file is written without query strings so quoted HTTPS paths are safe.
+
+After migrate, shop / deal clicks that still have a fake or empty `product_url` are rewritten in the Worker to:
+
+- `https://www.sephora.com/search?keyword=` + `encodeURIComponent(brand + ' ' + name)` (prestige)
+- `https://www.ulta.com/search?search=` + the same query (mass / drugstore brands)
+
+Never Google.
 
 Regenerate SQL from the product lists:
 
@@ -134,9 +159,11 @@ node scripts/generate-expand-catalog.mjs            # writes 0004
 node scripts/generate-perfume-makeup-expand.mjs     # writes 0006
 python3 scripts/resolve-real-product-images.py      # Shopify/Wikimedia/CDN lookup → JSON
 node scripts/generate-real-product-images.mjs       # writes 0007 from that JSON
+python3 scripts/resolve-real-product-urls.py        # Sephora catalog JSON + HEAD checks → JSON
+node scripts/generate-real-product-urls.mjs         # writes 0008 from that JSON
 ```
 
-Generators prefer official pack shots from `scripts/lib/catalog-media.mjs` (and `scripts/data/real-product-images.json` when present) instead of inventing Unsplash URLs. Product links use a real brand/retailer page when known, otherwise `https://www.sephora.com/search/{brand-name}` (path only — no `?`).
+Generators prefer official pack shots from `scripts/lib/catalog-media.mjs` (and `scripts/data/real-product-images.json` when present) instead of inventing Unsplash URLs. Product links prefer a verified Sephora/Ulta/brand PDP; SQL fallbacks stay on Sephora/Ulta as a path (no `?`). The Worker emits `search?keyword=` / Ulta `search?search=` only when the stored URL is still fake or missing.
 
 ## API (for a future mobile app)
 
