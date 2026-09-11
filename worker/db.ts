@@ -46,15 +46,17 @@ function parseJson<T>(raw: string, fallback: T): T {
   }
 }
 
-/** Fake seeds used https://www.sephora.com/product/{beauti-id} (404). Rewrite to a working search. */
+/** Prefer real PDPs. Rewrite fake Sephora slugs / Google stopgaps to Sephora keyword search. */
 function resolveProductUrl(url: string, brand: string, name: string): string {
   const trimmed = (url || "").trim();
+  const query = encodeURIComponent(`${brand} ${name}`.trim());
+  const sephoraSearch = `https://www.sephora.com/search?keyword=${query}`;
   const fakeSephora =
     /^https:\/\/www\.sephora\.com\/product\/[^/?#]+$/i.test(trimmed) &&
     !/-P\d+/i.test(trimmed);
-  if (fakeSephora || !trimmed) {
-    const q = encodeURIComponent(`${brand} ${name}`.trim());
-    return `https://www.google.com/search?q=${q}`;
+  const googleStopgap = /^https:\/\/www\.google\.com\/search\?/i.test(trimmed);
+  if (fakeSephora || googleStopgap || !trimmed) {
+    return sephoraSearch;
   }
   return trimmed;
 }
