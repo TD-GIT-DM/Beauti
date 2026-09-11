@@ -16,6 +16,7 @@ export interface DealSnapshot {
   dealScore: number;
   availability: Availability;
   restockEstimate: string | null;
+  listPrice?: number | null;
 }
 
 export interface CatalogProduct {
@@ -29,6 +30,7 @@ export interface CatalogProduct {
   dealScore: number;
   availability: Availability;
   restockEstimate: string | null;
+  productUrl?: string | null;
 }
 
 export interface DealProvider {
@@ -57,4 +59,9 @@ export interface ScanSummary {
   restocks: string[];
   priceDrops: string[];
   notificationsCreated: number;
+  /** `catalog` = production JSON sync; `demo` = mock force events. */
+  mode?: "catalog" | "demo";
+  becameOutOfStock?: string[];
+  fetched?: number;
+  unverified?: number;
 }

@@ -10,8 +10,8 @@ Beauti is **API-first** (Cloudflare Worker + D1) with a componentized React UI s
 - Cloudflare Workers with static assets (`assets.not_found_handling = "single-page-application"`)
 - D1 — products, price history, wishlist, notifications
 - KV — deal-scan cache
-- Cron Trigger — deal scanner every 15 minutes
-- Mock retailer feed at `src/services/deals/` (demo restock / drop only; production cron does not invent prices; **do not scrape storefronts**)
+- Cron Trigger — catalog availability + price refresh every 15 minutes (Sephora / Shopify JSON)
+- Mock retailer feed at `src/services/deals/` (demo restock / drop only; production cron does not invent prices or stock; **do not scrape storefronts**)
 
 ## Local setup
 
@@ -38,6 +38,9 @@ Open [http://localhost:5173](http://localhost:5173).
 | `npm run catalog:resolve-prices` | Sephora catalog JSON + Shopify product JSON + known MSRP → `scripts/data/honest-prices.json` |
 | `npm run catalog:generate:0009` | Write `0009_honest_prices.sql` from that JSON |
 | `npm run catalog:test-prices` | Assert no invented promo codes; discount only when list > sale |
+| `npm run catalog:resolve-availability` | Sephora catalog JSON + Shopify product JSON → `scripts/data/availability.json` |
+| `npm run catalog:generate:0010` | Write `0010_sync_availability.sql` from that JSON |
+| `npm run catalog:test-availability` | Assert explicit stock cites JSON sources; in-stock clears restock estimates |
 
 The Worker config lives in **`wrangler.toml`** (Wrangler also accepts `wrangler.jsonc`; this project uses TOML). Bindings:
 
@@ -45,13 +48,15 @@ The Worker config lives in **`wrangler.toml`** (Wrangler also accepts `wrangler.
 - `DEALS_CACHE` — KV namespace `beauti-deals-cache`
 - Cron `*/15 * * * *` → `scheduled` handler
 
-You can fire the cron locally:
+You can fire the production catalog sync locally:
 
 ```bash
 curl "http://localhost:5173/cdn-cgi/local/scheduled?format=json"
 ```
 
-Or use **Notifications → Run deal scan** (same scanner, with a forced restock + price drop so alerts are easy to demo).
+That hits the same 15-minute Cron Trigger path: a rotating batch of SKUs is quoted from Sephora catalog JSON and Shopify product JSON, then D1 `availability` / `restock_estimate` (and price when the source includes it) are persisted. Wishlist restock alerts fire on real OOS → in-stock transitions.
+
+**Notifications → Run deal scan** is a separate demo path (`POST /api/deals/scan` with `force`). It still forces a mock restock + price drop so alerts are easy to demo. It does **not** call retailer APIs.
 
 ## Catalog UX
 
@@ -68,9 +73,7 @@ When the deal scanner sees a wishlisted item **restock** or **drop in price**, i
 
 ### Email later
 
-The cron is a **heartbeat only** — it does not overwrite honest catalog prices with mock drops. Manual **Notifications → Run deal scan** still forces a demo restock / drop for alerts.
-
-The cron already creates notification records. To email:
+The cron already creates notification records from **real** restock / price-drop transitions. To email:
 
 1. Add `users.email` (or a later account table) keyed from `wishlist.user_id`
 2. In `src/services/deals/index.ts` after `createNotifications`, send through Resend, SES, or MailChannels
@@ -84,12 +87,19 @@ The cron already creates notification records. To email:
 
 ```
 src/services/deals/
-  types.ts          DealProvider, DealSnapshot, AffiliateClient
-  mock-retailer.ts  MockRetailerFeed (identity snapshots; forced demo events only)
-  index.ts          scanDeals() → D1 + KV + wishlist alerts
+  types.ts            DealProvider, DealSnapshot, AffiliateClient
+  catalog-sources.ts  Sephora catalog JSON + Shopify product JSON (production)
+  mock-retailer.ts    MockRetailerFeed (identity snapshots; forced demo events only)
+  index.ts            scanDeals() → D1 + KV + wishlist alerts
 ```
 
-Replace `MockRetailerFeed` with an Impact / CJ / ShareASale / retailer **feed** client that implements `DealProvider.fetchDeals()`. Do not scrape third-party HTML.
+Cron (`*/15 * * * *`, no `force`) loads a rotating batch (~48 SKUs, wishlisted OOS first) and quotes each from:
+
+1. Linked Shopify `/products/{handle}.js` when the stored URL is a brand PDP
+2. Sephora `/api/v2/catalog/search` (and product JSON when that card includes `isOutOfStock`)
+3. Brand Shopify `products.json` when the brand has a public shop and search omitted stock flags
+
+Unverified SKUs are left unchanged — stock is never invented. Manual **Run deal scan** still uses `MockRetailerFeed` + forced events. Do not scrape third-party HTML.
 
 ## Deploy to Cloudflare
 
@@ -128,18 +138,19 @@ npm run db:migrate:remote    # production D1 — applies pending files in migrat
 | `0007_real_product_images.sql` | Official brand/retailer **pack shots** (~210 verified HTTPS URLs, no `?`) + real `product_url`s (brand/Shopify page, or a Sephora `/search/{slug}` path). The other ~370 SKUs keep the best pack-like photo and gain an `image-placeholder` tag. Do **not** `db.exec` this from `ensureCatalog` — apply with Wrangler / MCP batch updates. |
 | `0008_real_product_urls.sql` | Replaces Google / fake `sephora.com/product/{beauti-id}` links with **verified retailer or brand PDPs** (**441 / 580**: 367 Sephora `-P` pages, 74 official brand PDPs). The other **139** SKUs get a path-only Sephora `/search/{slug}` or Ulta `/brand/{brand}` URL (no `?` in SQL). Do **not** `db.exec` this from `ensureCatalog`. |
 | `0009_honest_prices.sql` | Adds `list_price`, rewrites `price` / `promo_codes` / `deal_score` from Sephora catalog JSON, Shopify product JSON, or known MSRP. Clears invented seed coupons and fake price-history peaks. Do **not** `db.exec` this from `ensureCatalog`. |
+| `0010_sync_availability.sql` | Rewrites `availability` / `restock_estimate` / `deal_score` from the same catalog JSON sources. OOS SKUs keep a restock estimate only when the source provides one; in-stock clears stale estimates. Unverified rows are left unchanged. Do **not** `db.exec` this from `ensureCatalog`. |
 
 `INSERT OR IGNORE` so re-applying is safe on an already-seeded database.
 
 ### Apply `0008` to production D1
 
-`ensureCatalog` never runs `0008` or `0009` (same 100 KB / statement-volume limit that 500s 0004/0006/0007). Apply the files with Wrangler or Cloudflare MCP.
+`ensureCatalog` never runs `0008`, `0009`, or `0010` (same 100 KB / statement-volume limit that 500s 0004/0006/0007). Apply the files with Wrangler or Cloudflare MCP.
 
 **Wrangler (preferred):**
 
 ```bash
 npm run db:migrate:remote    # CI=1 wrangler d1 migrations apply beauti --remote
-# includes any pending files in migrations/, including 0008 + 0009
+# includes any pending files in migrations/, including 0008 + 0009 + 0010
 npm run deploy               # also runs remote migrate, then wrangler deploy
 ```
 
@@ -169,6 +180,8 @@ python3 scripts/resolve-real-product-urls.py        # Sephora catalog JSON + HEA
 node scripts/generate-real-product-urls.mjs         # writes 0008 from that JSON
 python3 scripts/resolve-honest-prices.py            # Sephora catalog + Shopify JSON + known MSRP → JSON
 node scripts/generate-honest-prices.mjs             # writes 0009 from that JSON
+python3 scripts/resolve-availability.py             # Sephora catalog + Shopify JSON → availability JSON
+node scripts/generate-availability.mjs              # writes 0010 from that JSON
 ```
 
 ### Re-run price sync
@@ -189,7 +202,27 @@ npm run db:migrate:local          # or db:migrate:remote
 3. **Known list prices** in `scripts/data/known-list-prices.json` when neither feed matches
 4. Keep the existing catalog selling price and set `discountPercent: 0` / `promo_codes: []`
 
-A `% off` badge is emitted only when `list_price > price` (a real sale) or a promo is marked `verified`. The production cron does not persist mock price drops.
+A `% off` badge is emitted only when `list_price > price` (a real sale) or a promo is marked `verified`. The production cron **does** persist real price + availability from those JSON sources (rotating batch every 15 minutes). It does not persist mock price drops.
+
+### Re-run availability sync
+
+Availability must match the retailer/brand page we link to. Do not invent stock or scrape HTML.
+
+```bash
+npm run catalog:resolve-availability   # Sephora catalog JSON + Shopify /products/{handle}.js + products.json
+npm run catalog:generate:0010          # rewrites migrations/0010_sync_availability.sql
+npm run catalog:test-availability
+npm run db:migrate:local               # or db:migrate:remote
+```
+
+`resolve-availability.py` prefers:
+
+1. **Shopify product JSON** (`.js`) for official brand `/products/{handle}` URLs
+2. **Sephora catalog search JSON** (and product JSON when it includes `isOutOfStock` / `isOnlyFewLeft` / `isComingSoon`) for `-P` PDPs
+3. **Brand Shopify `products.json`** when the search card omitted stock flags
+4. Leave the existing row unchanged when no source provided an explicit boolean
+
+OOS → `out_of_stock` and `restock_estimate` only if the source sent a date / “coming soon”; otherwise `NULL`. Back in stock → `in_stock` and a cleared restock estimate. The production cron repeats this for a rotating batch every 15 minutes and writes wishlist restock notifications on real transitions.
 
 Generators prefer official pack shots from `scripts/lib/catalog-media.mjs` (and `scripts/data/real-product-images.json` when present) instead of inventing Unsplash URLs. Product links prefer a verified Sephora/Ulta/brand PDP; SQL fallbacks stay on Sephora/Ulta as a path (no `?`). The Worker emits `search?keyword=` / Ulta `search?search=` only when the stored URL is still fake or missing.
 

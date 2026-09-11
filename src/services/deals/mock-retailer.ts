@@ -46,9 +46,10 @@ function identitySnapshot(product: CatalogProduct): DealSnapshot {
  * Demo retailer feed.
  *
  * Production cron must not invent prices or promo codes — snapshots match the
- * honest catalog. Availability can jitter slightly for local demos; price and
- * promo_codes stay exactly as stored. Swap this class for a licensed affiliate
- * feed later. Never scrape storefront HTML.
+ * honest catalog unless `mutateAvailability` is on. Price and promo_codes stay
+ * exactly as stored. Swap this class for a licensed affiliate feed later.
+ * Never scrape storefront HTML. Production availability sync lives in
+ * `catalog-sources.ts` (Sephora + Shopify JSON), not here.
  */
 export class MockRetailerFeed implements DealProvider {
   private readonly scanIndex: number;

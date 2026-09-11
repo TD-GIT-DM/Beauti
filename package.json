@@ -19,8 +19,11 @@
     "catalog:generate:0008": "node scripts/generate-real-product-urls.mjs",
     "catalog:resolve-prices": "python3 scripts/resolve-honest-prices.py",
     "catalog:generate:0009": "node scripts/generate-honest-prices.mjs",
+    "catalog:resolve-availability": "python3 scripts/resolve-availability.py",
+    "catalog:generate:0010": "node scripts/generate-availability.mjs",
     "catalog:test-urls": "node scripts/test-product-url.mjs",
     "catalog:test-prices": "node scripts/test-honest-prices.mjs",
+    "catalog:test-availability": "node scripts/test-availability.mjs",
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
