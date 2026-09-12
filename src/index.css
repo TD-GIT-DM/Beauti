@@ -869,6 +869,11 @@ img {
   align-items: center;
 }
 
+.settings-panel > .ghost-btn {
+  justify-self: start;
+  width: max-content;
+}
+
 .settings-submit {
   border: 0;
   cursor: pointer;
