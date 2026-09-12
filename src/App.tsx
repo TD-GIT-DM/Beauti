@@ -5,6 +5,7 @@ import { HomePage } from "./pages/HomePage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { ProductPage } from "./pages/ProductPage";
 import { SearchPage } from "./pages/SearchPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { WishlistPage } from "./pages/WishlistPage";
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
             <Route path="/product/:id" element={<ProductPage />} />
             <Route path="/wishlist" element={<WishlistPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

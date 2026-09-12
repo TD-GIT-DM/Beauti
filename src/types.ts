@@ -73,3 +73,10 @@ export interface ScanSummary {
   priceDrops: string[];
   notificationsCreated: number;
 }
+
+export interface AccountUser {
+  id: string;
+  username: string;
+  themeMain: string | null;
+  themeSecondary: string | null;
+}

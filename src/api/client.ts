@@ -1,4 +1,4 @@
-import type { AppNotification, Product, ProductQuery, ScanSummary, TagCount } from "../types";
+import type { AccountUser, AppNotification, Product, ProductQuery, ScanSummary, TagCount } from "../types";
 
 const DEVICE_KEY = "beauti_device";
 const WISHLIST_KEY = "beauti_wishlist";
@@ -31,12 +31,25 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  const res = await fetch(path, { ...init, headers });
+  const res = await fetch(path, { ...init, headers, credentials: "same-origin" });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `Request failed (${res.status})`);
+    let message = text || `Request failed (${res.status})`;
+    try {
+      const data = JSON.parse(text) as { error?: string };
+      if (data.error) message = data.error;
+    } catch {
+      /* keep text */
+    }
+    throw new Error(message);
   }
   return res.json() as Promise<T>;
+}
+
+export interface AuthResponse {
+  user: AccountUser | null;
+  wishlist?: string[];
+  deviceId?: string;
 }
 
 export const api = {
@@ -61,7 +74,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ force }),
     }),
-  wishlist: () => request<{ products: Product[] }>("/api/wishlist"),
+  wishlist: () => request<{ products: Product[]; account?: boolean }>("/api/wishlist"),
   addWish: (productId: string) =>
     request<{ ok: boolean }>("/api/wishlist", {
       method: "POST",
@@ -74,4 +87,22 @@ export const api = {
   markRead: (id: string) =>
     request<{ ok: boolean }>(`/api/notifications/${encodeURIComponent(id)}/read`, { method: "POST" }),
   markAllRead: () => request<{ ok: boolean }>("/api/notifications/read-all", { method: "POST" }),
+  me: () => request<AuthResponse>("/api/auth/me"),
+  signup: (username: string, password: string) =>
+    request<AuthResponse>("/api/auth/signup", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
+  signin: (username: string, password: string) =>
+    request<AuthResponse>("/api/auth/signin", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
+  signout: () => request<AuthResponse>("/api/auth/signout", { method: "POST" }),
+  settings: () => request<{ themeMain: string | null; themeSecondary: string | null; username: string }>("/api/settings"),
+  saveSettings: (theme: { themeMain: string; themeSecondary: string }) =>
+    request<{ ok: boolean; themeMain: string | null; themeSecondary: string | null }>("/api/settings", {
+      method: "PATCH",
+      body: JSON.stringify(theme),
+    }),
 };

@@ -86,7 +86,18 @@ export function deviceCookie(id: string): string {
   return `beauti_device=${encodeURIComponent(id)}; Path=/; Max-Age=31536000; SameSite=Lax`;
 }
 
-export async function wishlistedIds(db: D1Database, deviceId: string | null): Promise<Set<string>> {
+export async function wishlistedIds(
+  db: D1Database,
+  deviceId: string | null,
+  userId?: string | null,
+): Promise<Set<string>> {
+  if (userId) {
+    const { results } = await db
+      .prepare(`SELECT DISTINCT product_id FROM wishlist WHERE user_id = ?`)
+      .bind(userId)
+      .all<{ product_id: string }>();
+    return new Set((results ?? []).map((r) => r.product_id));
+  }
   if (!deviceId) return new Set();
   const { results } = await db
     .prepare(`SELECT product_id FROM wishlist WHERE device_id = ?`)

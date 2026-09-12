@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-do
 import { useApp } from "../context/AppContext";
 
 export function Layout() {
-  const { unread } = useApp();
+  const { unread, user } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const [q, setQ] = useState(() => new URLSearchParams(location.search).get("q") ?? "");
@@ -47,7 +47,7 @@ export function Layout() {
             />
           </form>
         )}
-        <nav className="header-actions" aria-label="Account">
+        <nav className="header-actions" aria-label="App">
           <NavLink className="icon-btn" to="/search" aria-label="Search catalog">
             <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="11" cy="11" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.6" />
@@ -78,6 +78,24 @@ export function Layout() {
               />
             </svg>
             {unread > 0 ? <span className="badge">{unread > 9 ? "9+" : unread}</span> : null}
+          </NavLink>
+          <NavLink
+            className="icon-btn"
+            to="/settings"
+            aria-label={user ? `Settings, signed in as ${user.username}` : "Settings"}
+            title="Settings"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3.1" fill="none" stroke="currentColor" strokeWidth="1.6" />
+              <path
+                d="M19.4 13.5a7.8 7.8 0 0 0 .1-1.5 7.8 7.8 0 0 0-.1-1.5l2-1.6-1.9-3.2-2.4 1a7.4 7.4 0 0 0-2.6-1.5l-.4-2.6h-3.8l-.4 2.6a7.4 7.4 0 0 0-2.6 1.5l-2.4-1-1.9 3.2 2 1.6a7.8 7.8 0 0 0-.1 1.5 7.8 7.8 0 0 0 .1 1.5l-2 1.6 1.9 3.2 2.4-1a7.4 7.4 0 0 0 2.6 1.5l.4 2.6h3.8l.4-2.6a7.4 7.4 0 0 0 2.6-1.5l2.4 1 1.9-3.2-2-1.6Z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.45"
+                strokeLinejoin="round"
+              />
+            </svg>
+            {user ? <span className="badge settings-dot" aria-hidden="true" /> : null}
           </NavLink>
         </nav>
       </header>

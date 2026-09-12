@@ -1,9 +1,19 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, getDeviceId, readLocalWishlist, writeLocalWishlist } from "../api/client";
-import type { AppNotification } from "../types";
+import {
+  applyTheme,
+  DEFAULT_THEME,
+  normalizeHex,
+  readLocalTheme,
+  writeLocalTheme,
+  type ThemeColors,
+} from "../lib/theme";
+import type { AccountUser, AppNotification } from "../types";
 
 interface AppState {
   deviceId: string;
+  user: AccountUser | null;
+  theme: ThemeColors;
   wishlist: Set<string>;
   notifications: AppNotification[];
   unread: number;
@@ -12,6 +22,11 @@ interface AppState {
   markRead: (id: string) => Promise<void>;
   markAllRead: () => Promise<void>;
   requestPush: () => Promise<void>;
+  setTheme: (theme: ThemeColors) => void;
+  resetTheme: () => void;
+  signIn: (username: string, password: string) => Promise<void>;
+  signUp: (username: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
 }
 
 const AppCtx = createContext<AppState | null>(null);
@@ -56,11 +71,46 @@ async function fireBrowserNotification(n: AppNotification) {
   }
 }
 
+function adoptAccountTheme(user: AccountUser, fallback: ThemeColors): ThemeColors {
+  const main = normalizeHex(user.themeMain ?? "") ?? fallback.main;
+  const secondary = normalizeHex(user.themeSecondary ?? "") ?? fallback.secondary;
+  return { main, secondary };
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [deviceId] = useState(() => (typeof window === "undefined" ? "" : getDeviceId()));
+  const [user, setUser] = useState<AccountUser | null>(null);
+  const [theme, setThemeState] = useState<ThemeColors>(() =>
+    typeof window === "undefined" ? { ...DEFAULT_THEME } : readLocalTheme(),
+  );
   const [wishlist, setWishlist] = useState<Set<string>>(() => new Set(readLocalWishlist()));
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unread, setUnread] = useState(0);
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
+
+  const persistTheme = useCallback((next: ThemeColors) => {
+    applyTheme(next);
+    writeLocalTheme(next);
+    setThemeState(next);
+  }, []);
+
+  const setTheme = useCallback(
+    (next: ThemeColors) => {
+      persistTheme(next);
+    },
+    [persistTheme],
+  );
+
+  const resetTheme = useCallback(() => {
+    persistTheme({ ...DEFAULT_THEME });
+  }, [persistTheme]);
+
+  const applyWishlist = useCallback((ids: string[]) => {
+    const unique = [...new Set(ids)];
+    setWishlist(new Set(unique));
+    writeLocalWishlist(unique);
+  }, []);
 
   const refreshNotifications = useCallback(async () => {
     try {
@@ -82,19 +132,58 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const finishAuth = useCallback(
+    async (nextUser: AccountUser, remoteWishlist?: string[]) => {
+      setUser(nextUser);
+      const current = themeRef.current;
+      const hasSaved = Boolean(normalizeHex(nextUser.themeMain ?? "") && normalizeHex(nextUser.themeSecondary ?? ""));
+      if (hasSaved) {
+        persistTheme(adoptAccountTheme(nextUser, current));
+      } else {
+        persistTheme(current);
+        await api.saveSettings({ themeMain: current.main, themeSecondary: current.secondary }).catch(() => undefined);
+      }
+      if (remoteWishlist) {
+        applyWishlist(remoteWishlist);
+        return;
+      }
+      const remote = await api.wishlist();
+      applyWishlist(remote.products.map((p) => p.id));
+    },
+    [applyWishlist, persistTheme],
+  );
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (!user) return;
+    const timer = window.setTimeout(() => {
+      void api
+        .saveSettings({ themeMain: theme.main, themeSecondary: theme.secondary })
+        .catch(() => undefined);
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [theme, user]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const local = readLocalWishlist();
       try {
-        const remote = await api.wishlist();
+        const session = await api.me();
         if (cancelled) return;
-        const remoteIds = remote.products.map((p) => p.id);
-        const missing = local.filter((id) => !remoteIds.includes(id));
-        await Promise.all(missing.map((id) => api.addWish(id).catch(() => undefined)));
-        const merged = new Set([...remoteIds, ...local]);
-        setWishlist(merged);
-        writeLocalWishlist([...merged]);
+        if (session.user) {
+          await finishAuth(session.user, session.wishlist);
+        } else {
+          const remote = await api.wishlist();
+          if (cancelled) return;
+          const remoteIds = remote.products.map((p) => p.id);
+          const missing = local.filter((id) => !remoteIds.includes(id));
+          await Promise.all(missing.map((id) => api.addWish(id).catch(() => undefined)));
+          applyWishlist([...remoteIds, ...local]);
+        }
       } catch {
         if (!cancelled) setWishlist(new Set(local));
       }
@@ -103,7 +192,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [refreshNotifications]);
+  }, [applyWishlist, finishAuth, refreshNotifications]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -131,13 +220,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       else await api.removeWish(productId);
     } catch {
       const remote = await api.wishlist().catch(() => null);
-      if (remote) {
-        const ids = remote.products.map((p) => p.id);
-        setWishlist(new Set(ids));
-        writeLocalWishlist(ids);
-      }
+      if (remote) applyWishlist(remote.products.map((p) => p.id));
     }
-  }, [wishlist]);
+  }, [applyWishlist, wishlist]);
 
   const markRead = useCallback(async (id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: 1 } : n)));
@@ -156,9 +241,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await Notification.requestPermission();
   }, []);
 
+  const signIn = useCallback(
+    async (username: string, password: string) => {
+      const data = await api.signin(username, password);
+      if (!data.user) throw new Error("Sign in failed.");
+      await finishAuth(data.user, data.wishlist);
+    },
+    [finishAuth],
+  );
+
+  const signUp = useCallback(
+    async (username: string, password: string) => {
+      const data = await api.signup(username, password);
+      if (!data.user) throw new Error("Could not create the account.");
+      await finishAuth(data.user, data.wishlist);
+    },
+    [finishAuth],
+  );
+
+  const signOut = useCallback(async () => {
+    await api.signout();
+    setUser(null);
+    const remote = await api.wishlist().catch(() => null);
+    if (remote) applyWishlist(remote.products.map((p) => p.id));
+  }, [applyWishlist]);
+
   const value = useMemo(
     () => ({
       deviceId,
+      user,
+      theme,
       wishlist,
       notifications,
       unread,
@@ -167,8 +279,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
       markRead,
       markAllRead,
       requestPush,
+      setTheme,
+      resetTheme,
+      signIn,
+      signUp,
+      signOut,
     }),
-    [deviceId, wishlist, notifications, unread, toggleWish, refreshNotifications, markRead, markAllRead, requestPush],
+    [
+      deviceId,
+      user,
+      theme,
+      wishlist,
+      notifications,
+      unread,
+      toggleWish,
+      refreshNotifications,
+      markRead,
+      markAllRead,
+      requestPush,
+      setTheme,
+      resetTheme,
+      signIn,
+      signUp,
+      signOut,
+    ],
   );
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
