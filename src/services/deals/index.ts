@@ -63,7 +63,10 @@ async function createNotifications(
   const productIds = [...new Set(events.map((e) => e.productId))];
   const placeholders = productIds.map(() => "?").join(",");
   const wishlisted = await db
-    .prepare(`SELECT device_id, product_id FROM wishlist WHERE product_id IN (${placeholders})`)
+    .prepare(
+      `SELECT device_id, product_id FROM wishlist
+       WHERE product_id IN (${placeholders}) AND device_id NOT LIKE 'acct:%'`,
+    )
     .bind(...productIds)
     .all<{ device_id: string; product_id: string }>();
 

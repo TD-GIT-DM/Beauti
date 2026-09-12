@@ -6,7 +6,7 @@ import { useApp } from "../context/AppContext";
 import type { Product } from "../types";
 
 export function WishlistPage() {
-  const { wishlist, toggleWish } = useApp();
+  const { wishlist, toggleWish, user } = useApp();
   const [products, setProducts] = useState<Product[]>([]);
 
   useEffect(() => {
@@ -24,7 +24,10 @@ export function WishlistPage() {
       <p className="brand-kicker">Saved</p>
       <h1 className="page-title">Wishlist</h1>
       <p className="lede">
-        Hearts persist on this device (and in D1). We’ll notify you when a saved piece restocks or drops in price.
+        {user
+          ? `Saved to ${user.username} — these hearts travel with the account, not just this browser.`
+          : "Guest hearts stay on this device (and in D1). Sign in from Settings to carry them to another session."}{" "}
+        We’ll notify you when a saved piece restocks or drops in price.
       </p>
       {products.length ? (
         <ProductGrid products={products} wishlist={wishlist} onToggle={(id) => void toggleWish(id)} />
