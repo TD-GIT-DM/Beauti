@@ -99,7 +99,17 @@ test("coverage questions prefer concealer and foundation", () => {
 });
 
 test("out-of-catalog requests yield an empty shortlist", () => {
-  const picks = catalogShortlist(catalog, "best iphone case");
+  const noisy = [
+    ...catalog,
+    product({
+      id: "hourglass-confession-red",
+      name: "Confession Lipstick If I Dare",
+      brand: "Hourglass",
+      tags: ["lipstick"],
+      description: "The best red case-study lipstick.",
+    }),
+  ];
+  const picks = catalogShortlist(noisy, "best iphone case");
   assert.equal(picks.length, 0);
   const query = expandAdvisorQuery("best iphone case");
   assert.match(emptyCatalogReply(query), /Nothing in the Beauti catalog/);

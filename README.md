@@ -122,7 +122,9 @@ Workers AI is enabled by the `[ai]` binding. After changing bindings, regenerate
 npm run cf-typegen
 ```
 
-No extra secret is required. Inference uses the Cloudflare account’s Workers AI allocation (free tier, then billed to the account). Local `npm run dev` uses the same binding; if `env.AI.run` fails, the advisor still returns ranked in-catalog products without a model.
+No extra secret is required. Inference uses the Cloudflare account’s Workers AI allocation (free tier, then billed to the account).
+
+`vite.config.ts` sets `cloudflare({ remoteBindings: false })` so `npm run dev` does not hang on OAuth. The advisor still ranks D1 products. Production `npm run deploy` uses the live `[ai]` Workers AI binding. After `npx wrangler login`, you can set `remoteBindings: true` to call `@cf/meta/llama-3.1-8b-instruct-fast` from Vite.
 
 Live URL after a successful `wrangler login` + `npm run deploy`:
 

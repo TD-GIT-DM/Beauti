@@ -32,6 +32,8 @@ crons = ["*/15 * * * *"]
 [vars]
 APP_NAME = "Beauti"
 
-# Workers AI: catalog-grounded product advisor (no third-party API key)
+# Workers AI: catalog-grounded product advisor (no third-party API key).
+# Production deploy uses this binding. Local Vite sets remoteBindings: false
+# so `npm run dev` does not hang on OAuth; catalog ranking still answers.
 [ai]
 binding = "AI"

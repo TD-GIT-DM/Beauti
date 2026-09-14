@@ -8,18 +8,28 @@ export const ADVISOR_MESSAGE_MAX = 500;
 
 const STOPWORDS = new Set([
   "a",
+  "about",
+  "also",
   "an",
   "and",
+  "any",
   "are",
   "be",
+  "best",
+  "better",
   "can",
+  "case",
+  "does",
   "find",
   "for",
   "get",
+  "have",
+  "how",
   "i",
   "in",
   "is",
   "it",
+  "just",
   "like",
   "looking",
   "me",
@@ -29,6 +39,7 @@ const STOPWORDS = new Set([
   "on",
   "or",
   "please",
+  "really",
   "show",
   "some",
   "something",
@@ -36,6 +47,7 @@ const STOPWORDS = new Set([
   "the",
   "this",
   "to",
+  "very",
   "want",
   "what",
   "which",
@@ -146,12 +158,11 @@ export function expandAdvisorQuery(question: string): AdvisorQuery {
 }
 
 export function advisorScore(product: AdvisorProduct, query: AdvisorQuery): number {
-  if (!query.expanded.length) return 0;
+  if (!query.expanded.length || !hasCatalogHit(product, query)) return 0;
   const name = product.name.toLowerCase();
   const brand = product.brand.toLowerCase();
   const tags = product.tags.map((tag) => tag.toLowerCase());
   const description = product.description.toLowerCase();
-  const hay = `${name} ${brand} ${tags.join(" ")} ${description}`;
   let score = 0;
   for (const token of query.expanded) {
     if (name.includes(token)) score += 5;
@@ -159,12 +170,22 @@ export function advisorScore(product: AdvisorProduct, query: AdvisorQuery): numb
     if (brand.includes(token)) score += 3;
     if (description.includes(token)) score += 1;
   }
-  for (const token of query.tokens) {
-    if (hay.includes(token)) score += 2;
-  }
   if (query.preferInStock && product.availability === "in_stock") score += 1;
   if (product.availability === "out_of_stock") score -= 1;
   return score;
+}
+
+function hasCatalogHit(product: AdvisorProduct, query: AdvisorQuery): boolean {
+  const name = product.name.toLowerCase();
+  const brand = product.brand.toLowerCase();
+  const tags = product.tags.map((tag) => tag.toLowerCase());
+  const description = product.description.toLowerCase();
+  return query.expanded.some((token) => {
+    if (name.includes(token) || brand.includes(token) || tags.some((tag) => tag === token || tag.includes(token))) {
+      return true;
+    }
+    return token.length >= 6 && description.includes(token);
+  });
 }
 
 function familyKey(product: AdvisorProduct): string {
@@ -190,7 +211,7 @@ export function catalogShortlist(products: AdvisorProduct[], question: string, l
   for (const row of scored) {
     const family = familyKey(row.product);
     const used = familyCount.get(family) ?? 0;
-    if (used >= 2) continue;
+    if (used >= 1) continue;
     familyCount.set(family, used + 1);
     picked.push(row.product);
     if (picked.length >= limit) break;
