@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   hexToHsl,
+  hexToRgb,
   hslToHex,
   hueIsExpressible,
   normalizeHex,
@@ -60,8 +61,14 @@ export function ColorSlider({
     emit(hex);
   }
 
+  const thumbRgb = hexToRgb(value);
+  const thumbStyle = {
+    "--slider-thumb": value,
+    "--slider-thumb-rgb": `${thumbRgb.r} ${thumbRgb.g} ${thumbRgb.b}`,
+  } as CSSProperties;
+
   return (
-    <div className="color-editor">
+    <div className="color-editor" style={thumbStyle}>
       <div className="color-editor-head">
         <span className="color-swatch" style={{ background: value }} aria-hidden="true" />
         <div>
@@ -93,6 +100,7 @@ export function ColorSlider({
             value={Math.round(hsl.h)}
             onChange={(e) => setHsl({ h: Number(e.target.value) })}
             aria-valuetext={`${Math.round(hsl.h)} degrees`}
+            style={thumbStyle}
           />
           <em>{Math.round(hsl.h)}</em>
         </label>
@@ -113,6 +121,7 @@ export function ColorSlider({
           value={Math.round(hsl.s * 100)}
           onChange={(e) => setHsl({ s: Number(e.target.value) / 100 })}
           style={{
+            ...thumbStyle,
             background: `linear-gradient(90deg, ${hslToHex({ ...hsl, s: 0 })}, ${hslToHex({ ...hsl, s: 1 })})`,
           }}
         />
@@ -129,6 +138,7 @@ export function ColorSlider({
           value={Math.round(hsl.l * 100)}
           onChange={(e) => setHsl({ l: Number(e.target.value) / 100 })}
           style={{
+            ...thumbStyle,
             background: `linear-gradient(90deg, #000, ${hslToHex({ ...hsl, l: 0.5 })}, #fff)`,
           }}
         />
