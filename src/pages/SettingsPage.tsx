@@ -115,7 +115,8 @@ export function SettingsPage() {
         <section className="settings-panel" aria-labelledby="palette-heading">
           <h2 id="palette-heading">Palette</h2>
           <p className="lede" style={{ margin: 0 }}>
-            Main paints gold — buttons, hearts, borders, links. Secondary paints the glitter black surfaces.
+            Main paints gold — buttons, hearts, borders, links. Secondary paints the glitter-black
+            surfaces; its hue tints the vault once the color has enough saturation and light.
           </p>
           <ColorSlider
             label="Main"

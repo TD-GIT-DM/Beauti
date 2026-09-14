@@ -96,6 +96,27 @@ export function hslToHex(hsl: HslColor): string {
   return rgbToHex(r, g, b);
 }
 
+/**
+ * Near-black / gray hex colors have no chroma, so hue is undefined and
+ * `hslToRgb` ignores H when S is 0 (or L is ~0 / ~1). These floors keep a
+ * dragged hue alive through 8-bit hex and visible on the vault surfaces.
+ */
+export const HUE_VISIBLE_MIN_S = 0.46;
+export const HUE_VISIBLE_MIN_L = 0.1;
+export const HUE_VISIBLE_MAX_L = 0.88;
+
+export function hueIsExpressible(hsl: HslColor): boolean {
+  return hsl.s > 0.02 && hsl.l > 0.03 && hsl.l < 0.97;
+}
+
+export function withVisibleHue(hsl: HslColor): HslColor {
+  return {
+    h: ((hsl.h % 360) + 360) % 360,
+    s: Math.max(hsl.s, HUE_VISIBLE_MIN_S),
+    l: Math.min(HUE_VISIBLE_MAX_L, Math.max(hsl.l, HUE_VISIBLE_MIN_L)),
+  };
+}
+
 export function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
