@@ -999,7 +999,7 @@ img {
   border-radius: 999px;
   background: var(--line);
   cursor: pointer;
-  accent-color: var(--gold);
+  accent-color: var(--slider-thumb, var(--gold));
 }
 
 .color-slider.hue-slider {
@@ -1021,18 +1021,18 @@ img {
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: var(--gold);
+  background: var(--slider-thumb, var(--gold));
   border: 2px solid var(--ink);
-  box-shadow: 0 0 12px rgb(var(--gold-rgb) / 0.45);
+  box-shadow: 0 0 12px rgb(var(--slider-thumb-rgb, var(--gold-rgb)) / 0.45);
 }
 
 .color-slider::-moz-range-thumb {
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: var(--gold);
+  background: var(--slider-thumb, var(--gold));
   border: 2px solid var(--ink);
-  box-shadow: 0 0 12px rgb(var(--gold-rgb) / 0.45);
+  box-shadow: 0 0 12px rgb(var(--slider-thumb-rgb, var(--gold-rgb)) / 0.45);
 }
 
 @media (max-width: 520px) {
