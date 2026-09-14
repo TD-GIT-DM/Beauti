@@ -33,14 +33,14 @@ export function ProductPage() {
   if (error) {
     return (
       <main id="main" className="page">
-        <EmptyState title="Missing from the edit" body="This product could not be found." action={{ to: "/", label: "Browse" }} />
+        <EmptyState title="Not found" body="This product could not be found." action={{ to: "/", label: "Browse" }} />
       </main>
     );
   }
   if (!product) {
     return (
       <main id="main" className="page">
-        <EmptyState title="Loading" body="Opening the look…" />
+        <EmptyState title="Loading" body="Loading product." />
       </main>
     );
   }
@@ -49,7 +49,7 @@ export function ProductPage() {
   const max = Math.max(...product.priceHistory.map((p) => p.price), product.price, 1);
   const restockNote =
     product.availability === "out_of_stock"
-      ? ` Currently unavailable. Rough restock estimate: ${product.restockEstimate ?? "unknown / may not return"}.`
+      ? ` Out of stock. Restock estimate: ${product.restockEstimate ?? "unknown / may not return"}.`
       : "";
 
   return (

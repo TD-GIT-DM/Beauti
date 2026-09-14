@@ -31,7 +31,7 @@ export function normalizeUsername(raw: string): string {
 
 export function validateUsername(username: string): string | null {
   if (!USERNAME_RE.test(username)) {
-    return "Username must be 3–24 characters: lowercase letters, numbers, or underscore.";
+    return "Username must be 3 to 24 characters: lowercase letters, numbers, or underscore.";
   }
   return null;
 }

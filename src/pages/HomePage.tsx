@@ -42,7 +42,7 @@ export function HomePage() {
   if (loading) {
     return (
       <main id="main" className="page">
-        <EmptyState title="Preparing the edit" body="Loading real markdowns and honest prices…" />
+        <EmptyState title="Loading" body="Loading deals and prices." />
       </main>
     );
   }
@@ -51,9 +51,9 @@ export function HomePage() {
     return (
       <main id="main" className="page">
         <EmptyState
-          title="Catalog is quiet"
-          body="The vault is up — search shades and treatments while we look for real markdowns."
-          action={{ to: "/search", label: "Search the vault" }}
+          title="No deals right now"
+          body="Search the catalog while we look for markdowns."
+          action={{ to: "/search", label: "Search catalog" }}
         />
       </main>
     );
@@ -62,7 +62,7 @@ export function HomePage() {
   return (
     <main id="main">
       <DealsHighlight products={deals} />
-      <h1 className="sr-only">Top five beauty picks — real discounts, then honest best prices</h1>
+      <h1 className="sr-only">Top five deals. Real discounts, then best prices.</h1>
       <div className="snap-catalog" aria-label="Top five deals">
         {deals.map((product, index) => (
           <section className="snap-item" key={product.id} aria-label={`${product.brand} ${product.name}`}>
@@ -78,11 +78,11 @@ export function HomePage() {
         ))}
         <section className="snap-item explore-snap" aria-label="Browse the full catalog">
           <div className="explore-snap-inner">
-            <p className="brand-kicker">The vault</p>
-            <h2 className="page-title">One hundred shades deeper</h2>
+            <p className="brand-kicker">Catalog</p>
+            <h2 className="page-title">More products</h2>
             <p className="lede">
-              Those five are live retailer markdowns when they exist, otherwise honest best prices — never a fake
-              percent-off. Search lipstick, foundation shades, skincare, fragrance, hair, nails, and tools.
+              The first five are retailer markdowns when we have them. Otherwise we show best prices, never a fake
+              percent off. Search lipstick, foundation, skincare, fragrance, hair, nails, and tools.
             </p>
             <Link className="shop-link" to="/search">
               Search the catalog

@@ -118,12 +118,12 @@ export function SearchPage() {
 
       {isLanding ? (
         <div className="search-hero">
-          <p className="brand-kicker">The vault</p>
-          <h1 className="page-title">Search any glow</h1>
+          <p className="brand-kicker">Catalog</p>
+          <h1 className="page-title">Search</h1>
           <p className="lede search-hero-lede">
-            Lipstick shades, foundations, skincare, fragrance — try “red lipstick” or filter by price and discount.
+            Try “red lipstick”, or filter by price and discount.
           </p>
-          <SearchBox id="vault-search" value={draftQ} onChange={setDraftQ} onSubmit={onSearch} centered />
+          <SearchBox id="hero-search" value={draftQ} onChange={setDraftQ} onSubmit={onSearch} centered />
           <div className="tag-cloud" aria-label="Popular categories">
             {suggested.map((item) => (
               <Link key={item.name} className="tag" to={`/search?tag=${encodeURIComponent(item.name)}`}>
@@ -140,8 +140,8 @@ export function SearchPage() {
           <h1 className="page-title">{heading}</h1>
           <p className="lede">
             {loading
-              ? "Gathering matches…"
-              : `${products.length} piece${products.length === 1 ? "" : "s"} — names, brands, colors, tags, and descriptions.`}
+              ? "Loading results."
+              : `${products.length} result${products.length === 1 ? "" : "s"}.`}
           </p>
           <div className="tag-cloud" aria-label="Filter by tag">
             {tags.slice(0, 24).map((item) => (
@@ -156,12 +156,12 @@ export function SearchPage() {
             ))}
           </div>
           {loading ? (
-            <EmptyState title="Searching" body="Gathering matches…" />
+            <EmptyState title="Searching" body="Loading results." />
           ) : products.length ? (
             <ProductGrid products={products} wishlist={wishlist} onToggle={(id) => void toggleWish(id)} />
           ) : (
             <EmptyState
-              title="Nothing matches this glow"
+              title="No matches"
               body="Try another color, brand, or clear the filters."
               action={{ to: "/search", label: "Reset search" }}
             />
@@ -194,7 +194,7 @@ function SearchBox({
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Search red lipstick, blush, serum…"
+        placeholder="Search red lipstick, blush, serum"
         autoComplete="off"
         autoFocus={centered}
       />

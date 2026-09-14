@@ -98,8 +98,7 @@ export function ColorSlider({
         </label>
         {!expressible ? (
           <p className="hue-nudge" role="note">
-            Near-black and gray have no visible hue. Dragging this lifts saturation and light so the
-            tint can show.
+            Black and gray have no hue. Dragging this adds a little saturation and light so the color can show.
           </p>
         ) : null}
       </div>

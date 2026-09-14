@@ -253,7 +253,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const signUp = useCallback(
     async (username: string, password: string) => {
       const data = await api.signup(username, password);
-      if (!data.user) throw new Error("Could not create the account.");
+      if (!data.user) throw new Error("Could not create account.");
       await finishAuth(data.user, data.wishlist);
     },
     [finishAuth],
