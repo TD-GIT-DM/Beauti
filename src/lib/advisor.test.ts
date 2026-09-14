@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   catalogShortlist,
+  effectiveQuestion,
   emptyCatalogReply,
   expandAdvisorQuery,
   groundAdvisorPick,
@@ -96,6 +97,31 @@ test("coverage questions prefer concealer and foundation", () => {
   assert.ok(ids.includes("nars-radiant-caramel"));
   assert.ok(ids.includes("estee-double-wear-2n1"));
   assert.ok(!ids.includes("kayali-vanilla-28"));
+});
+
+test("skin in a perfume name is not treated as coverage", () => {
+  const withSkinPerfume = [
+    ...catalog,
+    product({
+      id: "phlur-vanilla-skin",
+      name: "Vanilla Skin Eau de Parfum",
+      brand: "Phlur",
+      tags: ["fragrance", "perfume", "vanilla"],
+      description: "A skin scent with vanilla.",
+    }),
+  ];
+  const picks = catalogShortlist(withSkinPerfume, "covers my bad skin");
+  assert.ok(!picks.some((p) => p.id === "phlur-vanilla-skin"));
+});
+
+test("a new off-catalog question does not reuse the previous turn", () => {
+  const question = effectiveQuestion([
+    { role: "user", content: "covers my bad skin" },
+    { role: "assistant", content: "From the Beauti catalog: NARS concealer." },
+    { role: "user", content: "best iphone case" },
+  ]);
+  assert.equal(question, "best iphone case");
+  assert.equal(catalogShortlist(catalog, question).length, 0);
 });
 
 test("out-of-catalog requests yield an empty shortlist", () => {

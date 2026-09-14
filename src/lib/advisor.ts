@@ -55,6 +55,8 @@ const STOPWORDS = new Set([
   "you",
 ]);
 
+const WEAK_TOKENS = new Set(["bad", "cover", "covering", "covers", "skin", "smell", "smelling", "smells"]);
+
 const TOKEN_SYNONYMS: Record<string, string[]> = {
   acne: ["blemish", "concealer", "niacinamide"],
   blemish: ["concealer", "niacinamide", "blemish"],
@@ -139,7 +141,7 @@ export function expandAdvisorQuery(question: string): AdvisorQuery {
   const tokens = rawTokens.filter((token) => !STOPWORDS.has(token) && token.length > 1);
   const expandedSet = new Set<string>();
   for (const token of [...tokens, ...extras]) {
-    expandedSet.add(token);
+    if (!WEAK_TOKENS.has(token)) expandedSet.add(token);
     for (const syn of TOKEN_SYNONYMS[token] ?? []) expandedSet.add(syn);
   }
   const expanded = [...expandedSet];
@@ -222,7 +224,18 @@ export function catalogShortlist(products: AdvisorProduct[], question: string, l
 export function effectiveQuestion(messages: Array<{ role: string; content: string }>, fallback = ""): string {
   const users = messages.filter((m) => m.role === "user").map((m) => clampAdvisorMessage(m.content)).filter(Boolean);
   if (!users.length) return clampAdvisorMessage(fallback);
-  return users.slice(-2).join(" ");
+  const latest = users[users.length - 1] ?? "";
+  const previous = users[users.length - 2] ?? "";
+  if (previous && isFollowUp(latest)) return `${previous} ${latest}`;
+  return latest;
+}
+
+function isFollowUp(text: string): boolean {
+  const query = expandAdvisorQuery(text);
+  if (query.sort !== "relevance") return true;
+  if (query.tokens.length === 0) return true;
+  if (query.tokens.length > 2) return false;
+  return /^(another|more|similar|else|instead|too|also|cheaper|cheapest)\b/i.test(text.trim());
 }
 
 export function parseAdvisorJson(raw: unknown): AdvisorPick | null {
