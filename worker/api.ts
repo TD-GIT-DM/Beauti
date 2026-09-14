@@ -20,6 +20,7 @@ import {
   verifyPassword,
   type AuthUser,
 } from "./auth";
+import { adviseFromCatalog, parseAdvisorRequest } from "./advisor";
 import {
   decorateProducts,
   deviceCookie,
@@ -31,6 +32,7 @@ import {
   type ProductRecord,
   type ProductRow,
 } from "./db";
+
 
 type AppEnv = { Bindings: Env };
 
@@ -65,6 +67,20 @@ async function lovedFor(c: { req: { raw: Request }; env: Env }, deviceId: string
 export const api = new Hono<AppEnv>();
 
 api.get("/api/health", (c) => c.json({ ok: true, name: "Beauti" }));
+
+api.post("/api/advisor", async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const parsed = parseAdvisorRequest(body);
+  if ("error" in parsed) return json({ error: parsed.error }, { status: 400 });
+  const result = await adviseFromCatalog(c.env, parsed.question, parsed.messages);
+  return json(result);
+});
+
 
 api.get("/api/products", async (c) => {
   const q = (c.req.query("q") ?? "").trim();

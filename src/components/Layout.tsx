@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
+import { AdvisorChat } from "./AdvisorChat";
 
 export function Layout() {
   const { unread, user } = useApp();
@@ -100,6 +101,7 @@ export function Layout() {
         </nav>
       </header>
       <Outlet />
+      <AdvisorChat />
     </>
   );
 }

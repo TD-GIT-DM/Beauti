@@ -10,6 +10,7 @@ Beauti is **API-first** (Cloudflare Worker + D1) with a componentized React UI s
 - Cloudflare Workers with static assets (`assets.not_found_handling = "single-page-application"`)
 - D1 — products, price history, wishlist, notifications
 - KV — deal-scan cache
+- Workers AI — catalog-grounded on-site product advisor (`env.AI`)
 - Cron Trigger — catalog availability + price refresh every 15 minutes (Sephora / Shopify JSON)
 - Mock retailer feed at `src/services/deals/` (demo restock / drop only; production cron does not invent prices or stock; **do not scrape storefronts**)
 
@@ -46,6 +47,7 @@ The Worker config lives in **`wrangler.toml`** (Wrangler also accepts `wrangler.
 
 - `DB` — D1 database `beauti`
 - `DEALS_CACHE` — KV namespace `beauti-deals-cache`
+- `AI` — Workers AI (`[ai] binding = "AI"`). No third-party API key. Used by `POST /api/advisor`.
 - Cron `*/15 * * * *` → `scheduled` handler
 
 You can fire the production catalog sync locally:
@@ -64,6 +66,7 @@ That hits the same 15-minute Cron Trigger path: a rotating batch of SKUs is quot
 - **Search** — `/search` is a dedicated tab (header magnifying glass). Empty state: **filter control at the top**, search bar **centered** in the viewport. Results: `/search?q=` / `tag=` plus price and discount filters.
 - Multi-word queries are **AND-tokenized** (`red lipstick` matches tags/name/description that contain both `red` and `lipstick`), then ranked so name and tag hits beat a mention in copy.
 - Out-of-stock products stay visible; the description includes a **restock estimate** (date range or “unknown / may not return”)
+- **Ask Beauti** — floating catalog advisor. Natural questions are matched against D1 products (tags, name, brand, description, availability), then Workers AI writes a short reply from that shortlist only. Cards open `/product/:id`. Off-catalog asks are refused. This is product matching, not medical advice.
 
 ## Wishlist & notifications
 
@@ -112,6 +115,16 @@ Unverified SKUs are left unchanged — stock is never invented. Manual **Run dea
    ```
 
 3. `npm run deploy`
+
+Workers AI is enabled by the `[ai]` binding. After changing bindings, regenerate types:
+
+```bash
+npm run cf-typegen
+```
+
+No extra secret is required. Inference uses the Cloudflare account’s Workers AI allocation (free tier, then billed to the account).
+
+`vite.config.ts` sets `cloudflare({ remoteBindings: false })` so `npm run dev` does not hang on OAuth. The advisor still ranks D1 products. Production `npm run deploy` uses the live `[ai]` Workers AI binding. After `npx wrangler login`, you can set `remoteBindings: true` to call `@cf/meta/llama-3.1-8b-instruct-fast` from Vite.
 
 Live URL after a successful `wrangler login` + `npm run deploy`:
 
@@ -237,8 +250,11 @@ Generators prefer official pack shots from `scripts/lib/catalog-media.mjs` (and 
 | POST | `/api/deals/scan` | `{ "force": "cycle" \| "restock" \| "drop" }` |
 | GET/POST/DELETE | `/api/wishlist` | Device-scoped hearts |
 | GET | `/api/notifications` | Inbox |
+| POST | `/api/advisor` | `{ "message": "vanilla perfume", "messages"?: [{role, content}] }` catalog-only product matcher |
 | POST | `/api/push/subscribe` | Web Push subscription |
 
 Send `X-Device-Id` on every call.
+
+`POST /api/advisor` grounds replies in the D1 `products` table. The Worker searches the catalog first, then optionally calls `@cf/meta/llama-3.1-8b-instruct-fast` with that shortlist. Product ids in the response always exist in catalog. The SPA navigates to `/product/:id`.
 
 Promo codes are shown only when a **verified** retailer/brand promo exists. Seed codes such as `RARE10` / `SOL20` are not real and are stripped. A `% off` badge appears only when `list_price` is higher than the current selling `price` (or a promo is marked `verified: true`).

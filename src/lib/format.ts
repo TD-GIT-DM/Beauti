@@ -1,4 +1,4 @@
-import type { Product } from "../types";
+import type { Availability } from "../types";
 
 export function formatPrice(amount: number, currency: string) {
   try {
@@ -8,7 +8,7 @@ export function formatPrice(amount: number, currency: string) {
   }
 }
 
-export function stockLabel(product: Product) {
+export function stockLabel(product: { availability: Availability }) {
   if (product.availability === "out_of_stock") return "Out of stock";
   if (product.availability === "limited") return "Limited";
   return "In stock";
