@@ -80,3 +80,34 @@ export interface AccountUser {
   themeMain: string | null;
   themeSecondary: string | null;
 }
+
+export interface AdvisorProduct {
+  id: string;
+  name: string;
+  brand: string;
+  description: string;
+  imageUrl: string;
+  price: number;
+  currency: string;
+  tags: string[];
+  availability: Availability;
+  restockEstimate: string | null;
+}
+
+export interface AdvisorMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface AdvisorSearchHint {
+  q?: string;
+  tag?: string;
+}
+
+export interface AdvisorResponse {
+  reply: string;
+  products: AdvisorProduct[];
+  searchHint: AdvisorSearchHint | null;
+  grounded: boolean;
+  model: string | null;
+}

@@ -1,4 +1,14 @@
-import type { AccountUser, AppNotification, Product, ProductQuery, ScanSummary, TagCount } from "../types";
+import type {
+  AccountUser,
+  AdvisorMessage,
+  AdvisorResponse,
+  AppNotification,
+  Product,
+  ProductQuery,
+  ScanSummary,
+  TagCount,
+} from "../types";
+
 
 const DEVICE_KEY = "beauti_device";
 const WISHLIST_KEY = "beauti_wishlist";
@@ -104,5 +114,10 @@ export const api = {
     request<{ ok: boolean; themeMain: string | null; themeSecondary: string | null }>("/api/settings", {
       method: "PATCH",
       body: JSON.stringify(theme),
+    }),
+  advisor: (payload: { message: string; messages?: AdvisorMessage[] }) =>
+    request<AdvisorResponse>("/api/advisor", {
+      method: "POST",
+      body: JSON.stringify(payload),
     }),
 };

@@ -31,3 +31,7 @@ crons = ["*/15 * * * *"]
 
 [vars]
 APP_NAME = "Beauti"
+
+# Workers AI: catalog-grounded product advisor (no third-party API key)
+[ai]
+binding = "AI"

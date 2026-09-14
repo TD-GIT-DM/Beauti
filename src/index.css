@@ -1035,6 +1035,242 @@ img {
   box-shadow: 0 0 12px rgb(var(--gold-rgb) / 0.45);
 }
 
+.advisor {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 55;
+  display: grid;
+  justify-items: end;
+  gap: 0.7rem;
+}
+
+.advisor-fab {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--gold);
+  color: var(--on-gold);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 0 22px rgb(var(--gold-rgb) / 0.35);
+}
+
+.advisor-fab:hover {
+  background: var(--gold-bright);
+  color: var(--on-gold-bright);
+}
+
+.advisor-panel {
+  width: min(22.5rem, calc(100vw - 2rem));
+  max-height: min(36rem, calc(100dvh - 6rem));
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel-bg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.advisor-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.75rem;
+  align-items: start;
+  padding: 0.95rem 0.95rem 0.7rem;
+  border-bottom: 1px solid var(--gold-dim);
+}
+
+.advisor-head h2 {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 1.55rem;
+  margin: 0.1rem 0 0;
+  color: var(--ink);
+}
+
+.advisor-lede,
+.advisor-empty p,
+.advisor-note,
+.advisor-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.advisor-close {
+  width: 36px;
+  height: 36px;
+}
+
+.advisor-thread {
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  padding: 0.85rem 0.95rem;
+  min-height: 10rem;
+}
+
+.advisor-empty {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.advisor-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.advisor-chip {
+  cursor: pointer;
+  background: var(--chip-bg);
+  color: var(--gold-text);
+  border-color: var(--line);
+}
+
+.advisor-bubble {
+  border: 1px solid var(--gold-dim);
+  border-radius: 14px;
+  padding: 0.7rem 0.8rem;
+  background: var(--bg-card);
+}
+
+.advisor-bubble.user {
+  justify-self: end;
+  background: rgb(var(--gold-rgb) / 0.12);
+  max-width: 92%;
+}
+
+.advisor-bubble p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.advisor-picks {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.advisor-pick {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 0.7rem;
+  align-items: center;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.4rem;
+  background: var(--chip-bg);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.advisor-pick:hover {
+  box-shadow: 0 0 16px rgb(var(--gold-rgb) / 0.2);
+}
+
+.advisor-pick img,
+.advisor-pick-fallback {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.advisor-pick-fallback {
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 30% 20%, rgb(var(--gold-rgb) / 0.28), transparent 50%),
+    var(--bg-raised);
+  color: var(--gold-text-bright);
+  font-family: var(--font-serif);
+  letter-spacing: 0.08em;
+}
+
+.advisor-pick-copy {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.advisor-pick-copy strong {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 0.98rem;
+  color: var(--ink);
+}
+
+.advisor-pick-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.7rem;
+  align-items: baseline;
+  font-size: 0.8rem;
+  color: var(--gold-text);
+}
+
+.advisor-search-link {
+  margin: 0.55rem 0 0;
+}
+
+.advisor-search-link a {
+  color: var(--gold-text);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.advisor-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.88rem;
+}
+
+.advisor-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.45rem 0.55rem;
+  padding: 0.75rem 0.95rem 0.9rem;
+  border-top: 1px solid var(--gold-dim);
+}
+
+.advisor-form input {
+  grid-column: 1;
+  width: 100%;
+  background: var(--input-bg);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 0.55rem 0.95rem;
+  min-height: 42px;
+}
+
+.advisor-send {
+  border: 0;
+  cursor: pointer;
+  min-height: 42px;
+}
+
+.advisor-send:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.advisor-note {
+  grid-column: 1 / -1;
+}
+
 @media (max-width: 520px) {
   .header-actions {
     gap: 0.2rem;
