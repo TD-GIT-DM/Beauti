@@ -20,5 +20,5 @@
     "noUncheckedSideEffectImports": true
   },
   "include": ["src"],
-  "exclude": ["src/services"]
+  "exclude": ["src/services", "src/**/*.test.ts"]
 }

@@ -121,10 +121,194 @@ export function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
-function mixHex(hex: string, toward: string, amount: number): string {
+/** Soft cream / ink used for auto black-or-white text. */
+export const INK_LIGHT = "#f4efe6";
+export const INK_DARK = "#1a1610";
+export const AA_CONTRAST = 4.5;
+
+export function mixHex(hex: string, toward: string, amount: number): string {
   const a = hexToRgb(hex);
   const b = hexToRgb(toward);
   return rgbToHex(a.r + (b.r - a.r) * amount, a.g + (b.g - a.g) * amount, a.b + (b.b - a.b) * amount);
+}
+
+function srgbChannelToLinear(channel: number): number {
+  const s = channel / 255;
+  return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+}
+
+/** WCAG relative luminance of a 6-digit hex color. */
+export function relativeLuminance(hex: string): number {
+  const { r, g, b } = hexToRgb(hex);
+  return 0.2126 * srgbChannelToLinear(r) + 0.7152 * srgbChannelToLinear(g) + 0.0722 * srgbChannelToLinear(b);
+}
+
+export function contrastRatio(a: string, b: string): number {
+  const l1 = relativeLuminance(a);
+  const l2 = relativeLuminance(b);
+  const hi = Math.max(l1, l2);
+  const lo = Math.min(l1, l2);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** Pick readable ink against `bg`: soft cream/brown when they meet AA, else black or white. */
+export function autoContrast(bg: string, dark = INK_DARK, light = INK_LIGHT): string {
+  const soft = contrastRatio(light, bg) >= contrastRatio(dark, bg) ? light : dark;
+  if (contrastRatio(soft, bg) >= AA_CONTRAST) return soft;
+  return contrastRatio("#ffffff", bg) >= contrastRatio("#000000", bg) ? "#ffffff" : "#000000";
+}
+
+/**
+ * Keep as much of `fg` as possible, mixing toward black or white until `minRatio`
+ * against `bg`. Falls back to auto ink when the hue cannot reach the target.
+ */
+export function ensureContrast(fg: string, bg: string, minRatio: number, fallback?: string): string {
+  if (contrastRatio(fg, bg) >= minRatio) return fg;
+  const toward = autoContrast(bg, "#000000", "#ffffff");
+  let lo = 0;
+  let hi = 1;
+  let found = false;
+  for (let i = 0; i < 14; i++) {
+    const mid = (lo + hi) / 2;
+    if (contrastRatio(mixHex(fg, toward, mid), bg) >= minRatio) {
+      hi = mid;
+      found = true;
+    } else {
+      lo = mid;
+    }
+  }
+  if (found) return mixHex(fg, toward, hi);
+  const auto = fallback ?? autoContrast(bg);
+  const pole = toward === "#000000" ? "#000000" : "#ffffff";
+  return contrastRatio(auto, bg) >= contrastRatio(pole, bg) ? auto : pole;
+}
+
+/** Mute ink toward the background without dropping below `minRatio`. */
+export function fadeInk(ink: string, bg: string, preferredMix: number, minRatio: number): string {
+  const preferred = mixHex(ink, bg, preferredMix);
+  if (contrastRatio(preferred, bg) >= minRatio) return preferred;
+  let lo = 0;
+  let hi = preferredMix;
+  for (let i = 0; i < 12; i++) {
+    const mid = (lo + hi) / 2;
+    if (contrastRatio(mixHex(ink, bg, mid), bg) >= minRatio) lo = mid;
+    else hi = mid;
+  }
+  return mixHex(ink, bg, lo);
+}
+
+function readableSurface(bg: string, ink: string, toward: string, amount: number): string {
+  const preferred = mixHex(bg, toward, amount);
+  if (contrastRatio(ink, preferred) >= AA_CONTRAST) return preferred;
+  if (contrastRatio(ink, bg) >= AA_CONTRAST) return bg;
+  const pole = relativeLuminance(ink) > relativeLuminance(bg) ? "#000000" : "#ffffff";
+  let lo = 0;
+  let hi = 1;
+  let found = false;
+  for (let i = 0; i < 12; i++) {
+    const mid = (lo + hi) / 2;
+    if (contrastRatio(ink, mixHex(bg, pole, mid)) >= AA_CONTRAST) {
+      hi = mid;
+      found = true;
+    } else {
+      lo = mid;
+    }
+  }
+  return found ? mixHex(bg, pole, hi) : mixHex(bg, pole, 1);
+}
+
+export interface ThemeTokens {
+  "--bg": string;
+  "--bg-rgb": string;
+  "--bg-raised": string;
+  "--bg-card": string;
+  "--ink": string;
+  "--ink-rgb": string;
+  "--ink-soft": string;
+  "--muted": string;
+  "--gold": string;
+  "--gold-rgb": string;
+  "--gold-soft": string;
+  "--gold-bright": string;
+  "--gold-bright-rgb": string;
+  "--gold-text": string;
+  "--gold-text-bright": string;
+  "--gold-dim": string;
+  "--line": string;
+  "--on-gold": string;
+  "--on-gold-bright": string;
+  "--input-bg": string;
+  "--chip-bg": string;
+  "--panel-bg": string;
+  "--danger": string;
+  "--ok": string;
+  "--shadow": string;
+  "color-scheme": "light" | "dark";
+}
+
+export function themeTokens(theme: ThemeColors): ThemeTokens {
+  const main = normalizeHex(theme.main) ?? DEFAULT_THEME.main;
+  const secondary = normalizeHex(theme.secondary) ?? DEFAULT_THEME.secondary;
+  const gold = hexToRgb(main);
+  const goldHsl = rgbToHsl(gold.r, gold.g, gold.b);
+  const bg = hexToRgb(secondary);
+  const ink = autoContrast(secondary);
+  const lightSurface = relativeLuminance(ink) < relativeLuminance(secondary);
+  const inkRgb = hexToRgb(ink);
+  const soft = hslToHex({
+    h: goldHsl.h,
+    s: clamp01(goldHsl.s * 0.72),
+    l: clamp01(goldHsl.l + 0.06),
+  });
+  const bright = hslToHex({
+    h: goldHsl.h,
+    s: clamp01(goldHsl.s * 0.88),
+    l: clamp01(Math.min(0.88, goldHsl.l + 0.22)),
+  });
+  const brightRgb = hexToRgb(bright);
+  const toward = lightSurface ? "#000000" : "#ffffff";
+  const raised = readableSurface(secondary, ink, toward, lightSurface ? 0.06 : 0.045);
+  const card = readableSurface(secondary, ink, toward, lightSurface ? 0.08 : 0.06);
+  const inkSoft = fadeInk(ink, secondary, 0.14, AA_CONTRAST);
+  const muted = fadeInk(ink, secondary, 0.36, AA_CONTRAST);
+  const onGold = autoContrast(main);
+  const onGoldBright = autoContrast(bright);
+  const goldText = ensureContrast(main, secondary, AA_CONTRAST, ink);
+  const goldTextBright = ensureContrast(bright, secondary, AA_CONTRAST, ink);
+  const inputBg = readableSurface(secondary, ink, toward, lightSurface ? 0.05 : 0.07);
+  const chipBg = readableSurface(secondary, ink, toward, lightSurface ? 0.07 : 0.09);
+  const panelBg = readableSurface(card, ink, toward, lightSurface ? 0.02 : 0.03);
+  const danger = ensureContrast("#c47a7a", secondary, AA_CONTRAST, ink);
+  const ok = ensureContrast("#8aa37a", secondary, AA_CONTRAST, ink);
+
+  return {
+    "--bg": secondary,
+    "--bg-rgb": `${bg.r} ${bg.g} ${bg.b}`,
+    "--bg-raised": raised,
+    "--bg-card": card,
+    "--ink": ink,
+    "--ink-rgb": `${inkRgb.r} ${inkRgb.g} ${inkRgb.b}`,
+    "--ink-soft": inkSoft,
+    "--muted": muted,
+    "--gold": main,
+    "--gold-rgb": `${gold.r} ${gold.g} ${gold.b}`,
+    "--gold-soft": soft,
+    "--gold-bright": bright,
+    "--gold-bright-rgb": `${brightRgb.r} ${brightRgb.g} ${brightRgb.b}`,
+    "--gold-text": goldText,
+    "--gold-text-bright": goldTextBright,
+    "--gold-dim": `rgb(var(--gold-rgb) / ${lightSurface ? 0.22 : 0.18})`,
+    "--line": `rgb(var(--gold-rgb) / ${lightSurface ? 0.42 : 0.28})`,
+    "--on-gold": onGold,
+    "--on-gold-bright": onGoldBright,
+    "--input-bg": inputBg,
+    "--chip-bg": chipBg,
+    "--panel-bg": panelBg,
+    "--danger": danger,
+    "--ok": ok,
+    "--shadow": lightSurface ? "0 24px 80px rgba(0, 0, 0, 0.18)" : "0 24px 80px rgba(0, 0, 0, 0.55)",
+    "color-scheme": lightSurface ? "light" : "dark",
+  };
 }
 
 export function readLocalTheme(): ThemeColors {
@@ -146,51 +330,14 @@ export function writeLocalTheme(theme: ThemeColors): void {
 
 export function applyTheme(theme: ThemeColors): void {
   if (typeof document === "undefined") return;
+  const tokens = themeTokens(theme);
   const root = document.documentElement;
-  const main = normalizeHex(theme.main) ?? DEFAULT_THEME.main;
-  const secondary = normalizeHex(theme.secondary) ?? DEFAULT_THEME.secondary;
-  const gold = hexToRgb(main);
-  const goldHsl = rgbToHsl(gold.r, gold.g, gold.b);
-  const bg = hexToRgb(secondary);
-  const bgHsl = rgbToHsl(bg.r, bg.g, bg.b);
-  const lightSurface = bgHsl.l > 0.55;
-  const soft = hslToHex({
-    h: goldHsl.h,
-    s: clamp01(goldHsl.s * 0.72),
-    l: clamp01(goldHsl.l + 0.06),
-  });
-  const bright = hslToHex({
-    h: goldHsl.h,
-    s: clamp01(goldHsl.s * 0.88),
-    l: clamp01(Math.min(0.88, goldHsl.l + 0.22)),
-  });
-  const brightRgb = hexToRgb(bright);
-  const raised = mixHex(secondary, lightSurface ? "#000000" : "#ffffff", lightSurface ? 0.06 : 0.045);
-  const card = mixHex(secondary, lightSurface ? "#000000" : "#ffffff", lightSurface ? 0.08 : 0.06);
-  const ink = lightSurface ? "#1a1610" : "#f4efe6";
-  const inkSoft = lightSurface ? "#3c382f" : "#d8d2c6";
-  const muted = lightSurface ? "#5c574e" : "#a39e94";
-  const onGold = goldHsl.l > 0.62 ? "#16110a" : "#f7f1e6";
-
-  root.style.setProperty("--bg", secondary);
-  root.style.setProperty("--bg-rgb", `${bg.r} ${bg.g} ${bg.b}`);
-  root.style.setProperty("--bg-raised", raised);
-  root.style.setProperty("--bg-card", card);
-  root.style.setProperty("--ink", ink);
-  root.style.setProperty("--ink-soft", inkSoft);
-  root.style.setProperty("--muted", muted);
-  root.style.setProperty("--gold", main);
-  root.style.setProperty("--gold-rgb", `${gold.r} ${gold.g} ${gold.b}`);
-  root.style.setProperty("--gold-soft", soft);
-  root.style.setProperty("--gold-bright", bright);
-  root.style.setProperty("--gold-bright-rgb", `${brightRgb.r} ${brightRgb.g} ${brightRgb.b}`);
-  root.style.setProperty("--gold-dim", `rgb(var(--gold-rgb) / 0.18)`);
-  root.style.setProperty("--line", `rgb(var(--gold-rgb) / 0.28)`);
-  root.style.setProperty("--on-gold", onGold);
-  root.style.setProperty("color-scheme", lightSurface ? "light" : "dark");
-  document.body.style.backgroundColor = secondary;
+  for (const [key, value] of Object.entries(tokens)) {
+    root.style.setProperty(key, value);
+  }
+  document.body.style.backgroundColor = tokens["--bg"];
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", secondary);
+  if (meta) meta.setAttribute("content", tokens["--bg"]);
 }
 
 export function applyStoredTheme(): ThemeColors {
