@@ -1,4 +1,12 @@
-import { hexToHsl, hslToHex, normalizeHex, type HslColor } from "../lib/theme";
+import { useEffect, useRef, useState } from "react";
+import {
+  hexToHsl,
+  hslToHex,
+  hueIsExpressible,
+  normalizeHex,
+  withVisibleHue,
+  type HslColor,
+} from "../lib/theme";
 
 export function ColorSlider({
   label,
@@ -11,15 +19,45 @@ export function ColorSlider({
   value: string;
   onChange: (hex: string) => void;
 }) {
-  const hsl = hexToHsl(value);
+  const parsed = hexToHsl(value);
+  const expressible = hueIsExpressible(parsed);
+  const [heldHue, setHeldHue] = useState(parsed.h);
+  const lastEmitted = useRef(value);
+  const hsl: HslColor = {
+    h: expressible ? parsed.h : heldHue,
+    s: parsed.s,
+    l: parsed.l,
+  };
+
+  useEffect(() => {
+    if (value === lastEmitted.current) {
+      if (expressible) setHeldHue(parsed.h);
+      return;
+    }
+    lastEmitted.current = value;
+    setHeldHue(expressible ? parsed.h : 0);
+  }, [value, expressible, parsed.h]);
+
+  function emit(hex: string) {
+    lastEmitted.current = hex;
+    onChange(hex);
+  }
 
   function setHsl(next: Partial<HslColor>) {
-    onChange(hslToHex({ ...hsl, ...next }));
+    let merged: HslColor = { ...hsl, ...next };
+    if (next.h !== undefined) {
+      merged = withVisibleHue(merged);
+      setHeldHue(merged.h);
+    }
+    emit(hslToHex(merged));
   }
 
   function setHex(raw: string) {
     const hex = normalizeHex(raw);
-    if (hex) onChange(hex);
+    if (!hex) return;
+    const fromHex = hexToHsl(hex);
+    setHeldHue(hueIsExpressible(fromHex) ? fromHex.h : 0);
+    emit(hex);
   }
 
   return (
@@ -43,20 +81,27 @@ export function ColorSlider({
           />
         </label>
       </div>
-      <label className="slider-field">
-        <span>Hue</span>
-        <input
-          className="color-slider hue-slider"
-          type="range"
-          min={0}
-          max={360}
-          step={1}
-          value={Math.round(hsl.h)}
-          onChange={(e) => setHsl({ h: Number(e.target.value) })}
-          aria-valuetext={`${Math.round(hsl.h)} degrees`}
-        />
-        <em>{Math.round(hsl.h)}</em>
-      </label>
+      <div className="slider-stack">
+        <label className="slider-field">
+          <span>Hue</span>
+          <input
+            className="color-slider hue-slider"
+            type="range"
+            min={0}
+            max={360}
+            step={1}
+            value={Math.round(hsl.h)}
+            onChange={(e) => setHsl({ h: Number(e.target.value) })}
+            aria-valuetext={`${Math.round(hsl.h)} degrees`}
+          />
+          <em>{Math.round(hsl.h)}</em>
+        </label>
+        {!expressible ? (
+          <p className="hue-nudge" role="note">
+            Black and gray have no hue. Dragging this adds a little saturation and light so the color can show.
+          </p>
+        ) : null}
+      </div>
       <label className="slider-field">
         <span>Saturation</span>
         <input

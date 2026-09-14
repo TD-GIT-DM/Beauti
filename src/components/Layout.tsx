@@ -42,7 +42,7 @@ export function Layout() {
                 setQ(e.target.value);
                 if (e.target.value === "") navigate("/");
               }}
-              placeholder="Search tags, brands, glow…"
+              placeholder="Search tags, brands, products"
               autoComplete="off"
             />
           </form>

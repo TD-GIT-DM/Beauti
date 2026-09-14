@@ -25,7 +25,7 @@ export function NotificationsPage() {
       const { summary } = await api.scan("cycle");
       await refreshNotifications();
       setNote(
-        `Scan complete — ${summary.restocks.length} restock(s), ${summary.priceDrops.length} drop(s), ${summary.notificationsCreated} alert(s).`,
+        `Scan complete. ${summary.restocks.length} restock(s), ${summary.priceDrops.length} drop(s), ${summary.notificationsCreated} alert(s).`,
       );
     } catch (err) {
       setNote(err instanceof Error ? err.message : "Scan failed");
@@ -48,7 +48,7 @@ export function NotificationsPage() {
         ) : null}
       </div>
       <p className="lede">
-        Restock and price-drop alerts for wishlisted items. Cron scans the mock retailer feed every 15 minutes.
+        Restock and price-drop alerts for wishlisted items. Scans run every 15 minutes.
       </p>
       <div className="toolbar">
         <button className="ghost-btn" type="button" onClick={() => void enableAlerts()}>
@@ -89,14 +89,10 @@ export function NotificationsPage() {
       ) : (
         <EmptyState
           title="You’re all caught up"
-          body="Heart an out-of-stock or high-price piece, then run a deal scan (or wait for cron) to see restock and drop alerts."
+          body="Heart a product, then run a deal scan (or wait) to see restock and price-drop alerts."
           action={{ to: "/wishlist", label: "Open wishlist" }}
         />
       )}
-      <p className="footer-note">
-        Email later: from the same cron job, send through Resend/SES using `notifications` rows where `emailed_at IS NULL`.
-        Web Push later: store VAPID keys as Worker secrets and POST to `push_subscriptions.endpoint`.
-      </p>
     </main>
   );
 }

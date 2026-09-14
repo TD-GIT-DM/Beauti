@@ -25,9 +25,9 @@ export function WishlistPage() {
       <h1 className="page-title">Wishlist</h1>
       <p className="lede">
         {user
-          ? `Saved to ${user.username} — these hearts travel with the account, not just this browser.`
-          : "Guest hearts stay on this device (and in D1). Sign in from Settings to carry them to another session."}{" "}
-        We’ll notify you when a saved piece restocks or drops in price.
+          ? `Saved to ${user.username}. Hearts follow this account, not just this browser.`
+          : "Hearts stay on this device. Sign in from Settings to use them on another device."}{" "}
+        We’ll notify you when something restocks or drops in price.
       </p>
       {products.length ? (
         <ProductGrid products={products} wishlist={wishlist} onToggle={(id) => void toggleWish(id)} />

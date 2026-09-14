@@ -18,14 +18,14 @@ export function SettingsPage() {
     try {
       if (mode === "signup") {
         await signUp(username, password);
-        setNote("Account created. Guest hearts were merged into this username.");
+        setNote("Account created. Hearts from this device were added to this username.");
       } else {
         await signIn(username, password);
-        setNote("Signed in. Guest hearts on this device were merged with the account wishlist.");
+        setNote("Signed in. Hearts from this device were added to the account wishlist.");
       }
       setPassword("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not complete that request.");
+      setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setBusy(null);
     }
@@ -37,7 +37,7 @@ export function SettingsPage() {
     setNote(null);
     try {
       await signOut();
-      setNote("Signed out. This device still keeps its local hearts and palette.");
+      setNote("Signed out. Hearts and colors stay on this device.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign out failed.");
     } finally {
@@ -47,11 +47,11 @@ export function SettingsPage() {
 
   return (
     <main id="main" className="page settings-page">
-      <p className="brand-kicker">Atelier</p>
+      <p className="brand-kicker">Account</p>
       <h1 className="page-title">Settings</h1>
       <p className="lede">
-        Create a username to carry wishlists between devices. Palette sliders recolor gold accents and glitter
-        blacks across the whole vault — guests keep them here; accounts sync them to D1.
+        Create a username to keep your wishlist on more than one device. Palette sliders change accent and
+        background colors. Guests keep them on this device. Accounts save them.
       </p>
 
       <div className="settings-stack">
@@ -60,7 +60,7 @@ export function SettingsPage() {
           {user ? (
             <>
               <p className="lede" style={{ margin: 0 }}>
-                Signed in as <strong className="account-name">{user.username}</strong>. Hearts now live on this
+                Signed in as <strong className="account-name">{user.username}</strong>. Hearts are saved to this
                 username. Sign in elsewhere to load the same wishlist.
               </p>
               <button className="ghost-btn" type="button" onClick={() => void leave()} disabled={busy === "signout"}>
@@ -76,7 +76,7 @@ export function SettingsPage() {
                   autoComplete="username"
                   spellCheck={false}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="goldvault"
+                  placeholder="yourname"
                 />
               </label>
               <label className="filter-field">
@@ -103,8 +103,8 @@ export function SettingsPage() {
                 </button>
               </div>
               <p className="footer-note" style={{ textAlign: "left", padding: 0 }}>
-                Guest hearts stay on this device until you sign in. Then we <em>union</em> them with the account —
-                nothing is deleted — and the username becomes the source of truth.
+                Hearts stay on this device until you sign in. Then we merge them with the account. Nothing is
+                deleted.
               </p>
             </form>
           )}
@@ -115,22 +115,23 @@ export function SettingsPage() {
         <section className="settings-panel" aria-labelledby="palette-heading">
           <h2 id="palette-heading">Palette</h2>
           <p className="lede" style={{ margin: 0 }}>
-            Main paints gold — buttons, hearts, borders, links. Secondary paints the glitter black surfaces.
+            Main is the accent (buttons, hearts, borders, links). Secondary is the background. On near-black,
+            dragging hue adds a little saturation and light so the tint can show.
           </p>
           <ColorSlider
             label="Main"
-            hint="Accent gold, badges, hearts"
+            hint="Buttons, hearts, borders"
             value={theme.main}
             onChange={(main) => setTheme({ ...theme, main })}
           />
           <ColorSlider
             label="Secondary"
-            hint="Vault black, cards, header"
+            hint="Background, cards, header"
             value={theme.secondary}
             onChange={(secondary) => setTheme({ ...theme, secondary })}
           />
           <button className="ghost-btn" type="button" onClick={resetTheme}>
-            Reset to dark gold
+            Reset to default
           </button>
         </section>
       </div>
