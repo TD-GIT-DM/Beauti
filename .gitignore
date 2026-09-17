@@ -3,6 +3,7 @@ node_modules
 
 # Build
 dist
+dist-native
 dist-ssr
 *.local
 
@@ -22,6 +23,17 @@ scripts/data/real-product-urls.cache.json
 scripts/data/honest-prices.cache.json
 scripts/data/availability.cache.json
 scripts/data/availability.shopify.cache.json
+# Capacitor / Xcode (keep the project; ignore build products and copied web assets)
+ios/App/Pods
+ios/App/build
+ios/App/App/public
+ios/DerivedData
+ios/**/xcuserdata
+ios/**/*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+
+# Python
 scripts/__pycache__/
 
 # Editor

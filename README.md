@@ -2,7 +2,18 @@
 
 A dark, luxurious beauty shopping companion: top-discount editorial browse, tokenized catalog search, promo codes, a heart wishlist, and restock / price-drop alerts.
 
-Beauti is **API-first** (Cloudflare Worker + D1) with a componentized React UI so the same catalog, wishlist, and notification APIs can power a later mobile app.
+Beauti is **API-first** (Cloudflare Worker + D1) with a componentized React UI. The same catalog, wishlist, and notification APIs power the website and the iOS Capacitor shell.
+
+## iOS app shell
+
+The App Store wrapper lives in this repo (Capacitor). It ships the built SPA and calls the live Worker. This environment cannot sign in to Apple.
+
+- Full walkthrough: [`docs/ios.md`](docs/ios.md)
+- Listing copy and privacy labels: [`docs/app-store-listing.md`](docs/app-store-listing.md)
+- On a Mac: `npm run ios:bootstrap` then `npx cap open ios`
+- Bundle id: `com.tdgitdm.beauti` (how to change is in `docs/ios.md`)
+
+You still need your own Apple Developer Program membership to upload. Deploy the Worker CORS changes (`npm run deploy`) so the device can call `/api`.
 
 ## Stack
 
@@ -28,6 +39,9 @@ Open [http://localhost:5173](http://localhost:5173).
 | --- | --- |
 | `npm run dev` | Local D1 migrate + Vite (Workers runtime via `@cloudflare/vite-plugin`) |
 | `npm run build` | Typecheck + production build (`dist/`) |
+| `npm run build:ios` | SPA-only Capacitor bundle (`dist-native/`) aimed at the live Worker |
+| `npm run ios:bootstrap` | Mac: generate icons, build, `cap add ios` if needed, `cap sync` |
+| `npm run ios:sync` | Rebuild native web assets and copy them into `ios/` |
 | `npm run preview` | Build and preview the Worker bundle locally |
 | `npm run deploy` | Build, apply **remote** D1 migrations, `wrangler deploy` |
 | `npm run db:migrate:local` | Apply D1 migrations to local SQLite |
@@ -253,7 +267,7 @@ Generators prefer official pack shots from `scripts/lib/catalog-media.mjs` (and 
 | POST | `/api/advisor` | `{ "message": "vanilla perfume", "messages"?: [{role, content}] }` catalog-only product matcher |
 | POST | `/api/push/subscribe` | Web Push subscription |
 
-Send `X-Device-Id` on every call.
+Send `X-Device-Id` on every call. The iOS shell also sends `X-Beauti-Session` after sign-in (WKWebView may ignore the session cookie). See [`docs/ios.md`](docs/ios.md).
 
 `POST /api/advisor` grounds replies in the D1 `products` table. The Worker searches the catalog first, then optionally calls `@cf/meta/llama-3.1-8b-instruct-fast` with that shortlist. Product ids in the response always exist in catalog. The SPA navigates to `/product/:id`.
 

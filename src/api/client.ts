@@ -8,10 +8,12 @@ import type {
   ScanSummary,
   TagCount,
 } from "../types";
-
+import { apiBase, isNativeApp } from "../lib/native";
 
 const DEVICE_KEY = "beauti_device";
 const WISHLIST_KEY = "beauti_wishlist";
+const SESSION_KEY = "beauti_session";
+const SESSION_HEADER = "X-Beauti-Session";
 
 export function getDeviceId(): string {
   const existing = localStorage.getItem(DEVICE_KEY);
@@ -19,6 +21,19 @@ export function getDeviceId(): string {
   const id = crypto.randomUUID();
   localStorage.setItem(DEVICE_KEY, id);
   return id;
+}
+
+export function getStoredSessionId(): string | null {
+  try {
+    return localStorage.getItem(SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function writeStoredSessionId(id: string | null): void {
+  if (id) localStorage.setItem(SESSION_KEY, id);
+  else localStorage.removeItem(SESSION_KEY);
 }
 
 export function readLocalWishlist(): string[] {
@@ -35,13 +50,32 @@ export function writeLocalWishlist(ids: string[]): void {
   localStorage.setItem(WISHLIST_KEY, JSON.stringify([...new Set(ids)]));
 }
 
+function persistSessionFrom(data: unknown, res: Response): void {
+  const header = res.headers.get(SESSION_HEADER)?.trim();
+  if (header) {
+    writeStoredSessionId(header);
+    return;
+  }
+  if (data && typeof data === "object" && "sessionId" in data) {
+    const value = (data as { sessionId?: unknown }).sessionId;
+    if (typeof value === "string" && value) writeStoredSessionId(value);
+  }
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("X-Device-Id", getDeviceId());
+  const session = getStoredSessionId();
+  if (session) headers.set(SESSION_HEADER, session);
   if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  const res = await fetch(path, { ...init, headers, credentials: "same-origin" });
+  const base = apiBase();
+  const res = await fetch(`${base}${path}`, {
+    ...init,
+    headers,
+    credentials: base ? "include" : "same-origin",
+  });
   if (!res.ok) {
     const text = await res.text();
     let message = text || `Request failed (${res.status})`;
@@ -51,15 +85,23 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     } catch {
       /* keep text */
     }
+    if (res.status === 0 || res.status >= 500) {
+      message = isNativeApp()
+        ? `${message} Check that the live Beauti API is reachable.`
+        : message;
+    }
     throw new Error(message);
   }
-  return res.json() as Promise<T>;
+  const data = (await res.json()) as T;
+  persistSessionFrom(data, res);
+  return data;
 }
 
 export interface AuthResponse {
   user: AccountUser | null;
   wishlist?: string[];
   deviceId?: string;
+  sessionId?: string;
 }
 
 export const api = {
@@ -108,7 +150,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ username, password }),
     }),
-  signout: () => request<AuthResponse>("/api/auth/signout", { method: "POST" }),
+  signout: async () => {
+    const result = await request<AuthResponse>("/api/auth/signout", { method: "POST" });
+    writeStoredSessionId(null);
+    return result;
+  },
   settings: () => request<{ themeMain: string | null; themeSecondary: string | null; username: string }>("/api/settings"),
   saveSettings: (theme: { themeMain: string; themeSecondary: string }) =>
     request<{ ok: boolean; themeMain: string | null; themeSecondary: string | null }>("/api/settings", {

@@ -12,7 +12,9 @@ createRoot(document.getElementById("root")!).render(
   </StrictMode>,
 );
 
-if ("serviceWorker" in navigator) {
+import { isNativeApp } from "./lib/native";
+
+if ("serviceWorker" in navigator && !isNativeApp()) {
   window.addEventListener("load", () => {
     void navigator.serviceWorker.register("/sw.js");
   });

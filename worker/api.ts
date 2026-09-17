@@ -13,13 +13,16 @@ import {
   isSecureRequest,
   mergeGuestWishlist,
   normalizeUsername,
+  SESSION_HEADER,
   sessionCookie,
+  sessionIdFrom,
   userFromRequest,
   validatePassword,
   validateUsername,
   verifyPassword,
   type AuthUser,
 } from "./auth";
+import { isAllowedCorsOrigin, isCrossSiteRequest } from "./cors";
 import { adviseFromCatalog, parseAdvisorRequest } from "./advisor";
 import {
   decorateProducts,
@@ -44,10 +47,25 @@ function json<T>(
   const headers = new Headers(init.headers);
   headers.set("content-type", "application/json; charset=utf-8");
   if (extras.deviceId) headers.append("Set-Cookie", deviceCookie(extras.deviceId));
-  const secure = extras.request ? isSecureRequest(extras.request) : false;
-  if (extras.sessionId) headers.append("Set-Cookie", sessionCookie(extras.sessionId, secure));
-  if (extras.clearSession) headers.append("Set-Cookie", clearSessionCookie(secure));
-  return new Response(JSON.stringify(data), { ...init, headers });
+  const request = extras.request;
+  const origin = request?.headers.get("Origin");
+  const crossSite = Boolean(
+    request && origin && isAllowedCorsOrigin(origin) && isCrossSiteRequest(request),
+  );
+  const secure = request ? isSecureRequest(request) : false;
+  let payload: unknown = data;
+  if (extras.sessionId) {
+    headers.append("Set-Cookie", sessionCookie(extras.sessionId, secure, crossSite));
+    headers.set(SESSION_HEADER, extras.sessionId);
+    if (data && typeof data === "object" && !Array.isArray(data)) {
+      payload = { ...data, sessionId: extras.sessionId };
+    }
+  }
+  if (extras.clearSession) {
+    headers.append("Set-Cookie", clearSessionCookie(secure, crossSite));
+    headers.set(SESSION_HEADER, "");
+  }
+  return new Response(JSON.stringify(payload), { ...init, headers });
 }
 
 function requireDevice(request: Request): string {
@@ -278,9 +296,10 @@ api.post("/api/push/subscribe", async (c) => {
 
 api.get("/api/auth/me", async (c) => {
   const { deviceId, user } = await actor(c);
+  const sessionId = sessionIdFrom(c.req.raw);
   if (user) {
     const wishlist = await mergeGuestWishlist(c.env.DB, user.id, deviceId);
-    return json({ user, wishlist, deviceId }, {}, { deviceId });
+    return json({ user, wishlist, deviceId }, {}, { deviceId, sessionId, request: c.req.raw });
   }
   return json({ user: null, wishlist: [...(await lovedFor(c, deviceId, null))], deviceId }, {}, { deviceId });
 });
