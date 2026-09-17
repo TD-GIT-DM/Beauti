@@ -5,6 +5,7 @@ import { EmptyState } from "../components/EmptyState";
 import { formatPrice, stockLabel } from "../lib/format";
 import { HeartButton } from "../components/HeartButton";
 import { ProductCover } from "../components/ProductCover";
+import { ShopLink } from "../components/ShopLink";
 import { useApp } from "../context/AppContext";
 import type { Product } from "../types";
 
@@ -107,9 +108,9 @@ export function ProductPage() {
             ))}
           </div>
           <p>
-            <a className="shop-link" href={product.productUrl} target="_blank" rel="noreferrer">
+            <ShopLink className="shop-link" href={product.productUrl}>
               View retailer
-            </a>
+            </ShopLink>
           </p>
         </div>
       </div>

@@ -1,7 +1,24 @@
 import { deviceIdFrom } from "./db";
+import {
+  clearSessionCookie,
+  isSecureRequest,
+  SESSION_COOKIE,
+  SESSION_HEADER,
+  SESSION_MAX_AGE,
+  sessionCookie,
+  sessionIdFrom,
+} from "./session";
 
-export const SESSION_COOKIE = "beauti_session";
-export const SESSION_MAX_AGE = 60 * 60 * 24 * 30;
+export {
+  clearSessionCookie,
+  isSecureRequest,
+  SESSION_COOKIE,
+  SESSION_HEADER,
+  SESSION_MAX_AGE,
+  sessionCookie,
+  sessionIdFrom,
+};
+
 const PBKDF2_ITERATIONS = 100_000;
 const USERNAME_RE = /^[a-z0-9_]{3,24}$/;
 
@@ -86,34 +103,6 @@ export async function hashPassword(password: string): Promise<{ hash: string; sa
 export async function verifyPassword(password: string, hash: string, saltHex: string): Promise<boolean> {
   const computed = await derivePasswordHash(password, hexToBytes(saltHex));
   return timingSafeEqual(computed, hash);
-}
-
-export function sessionIdFrom(request: Request): string | null {
-  const cookie = request.headers.get("Cookie") ?? "";
-  const match = cookie.match(/(?:^|;\s*)beauti_session=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-export function isSecureRequest(request: Request): boolean {
-  return new URL(request.url).protocol === "https:";
-}
-
-export function sessionCookie(id: string, secure: boolean): string {
-  const parts = [
-    `${SESSION_COOKIE}=${encodeURIComponent(id)}`,
-    "Path=/",
-    `Max-Age=${SESSION_MAX_AGE}`,
-    "HttpOnly",
-    "SameSite=Lax",
-  ];
-  if (secure) parts.push("Secure");
-  return parts.join("; ");
-}
-
-export function clearSessionCookie(secure: boolean): string {
-  const parts = [`${SESSION_COOKIE}=`, "Path=/", "Max-Age=0", "HttpOnly", "SameSite=Lax"];
-  if (secure) parts.push("Secure");
-  return parts.join("; ");
 }
 
 function mapUser(row: UserRow): AuthUser | null {

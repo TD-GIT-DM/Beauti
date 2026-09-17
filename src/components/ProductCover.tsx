@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { formatDiscount, formatPrice, stockLabel } from "../lib/format";
 import type { Product } from "../types";
 import { HeartButton } from "./HeartButton";
+import { ShopLink } from "./ShopLink";
 
 interface Props {
   product: Product;
@@ -98,9 +99,9 @@ export function ProductCover({
             </Link>
           ))}
         </div>
-        <a className="shop-link" href={product.productUrl} target="_blank" rel="noreferrer">
+        <ShopLink className="shop-link" href={product.productUrl}>
           Shop {promo ? `with ${promo.code}` : "now"}
-        </a>
+        </ShopLink>
       </div>
     </article>
   );
