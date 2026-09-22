@@ -7,7 +7,7 @@ export function tokenizeQuery(q: string): string[] {
     .filter((token) => token.length > 0);
 }
 
-/** Higher scores for tokens in the name/tags so "red lipstick" ranks lipsticks above a mention in copy. */
+/** Higher scores for tokens in the name or private tags so "red lipstick" ranks lipsticks above a mention in copy. */
 export function relevanceScore(
   product: { name: string; brand: string; description: string; tags: string[] },
   q: string,
@@ -56,13 +56,51 @@ export function parseOptionalNumber(value: string | undefined | null): number | 
   return Number.isFinite(n) ? n : undefined;
 }
 
-/**
- * Tag chips show global catalog counts. Selecting one replaces the free-text
- * query and price filters so the result set is that tag, not an accidental AND.
- */
-export function tagSelectionQuery(name: string): string {
-  const next = new URLSearchParams();
-  const trimmed = name.trim();
-  if (trimmed) next.set("tag", trimmed);
-  return next.toString();
+/** Search URLs do not keep a public tag filter. Free-text `q` still matches private tags on the server. */
+export function withoutTagParam(params: URLSearchParams): URLSearchParams {
+  const next = new URLSearchParams(params);
+  next.delete("tag");
+  return next;
+}
+
+export interface CatalogFilterProduct {
+  name: string;
+  brand: string;
+  description: string;
+  tags: string[];
+  promoCodes: Array<{ code: string; label: string }>;
+  price: number;
+  discountPercent: number;
+}
+
+export interface CatalogFilterOptions {
+  q: string;
+  dealsOnly: boolean;
+  minPrice?: number;
+  maxPrice?: number;
+  minDiscount?: number;
+}
+
+/** Match `q` against name, brand, description, promo copy, and private tags. No public tag browse. */
+export function filterCatalog<T extends CatalogFilterProduct>(products: T[], opts: CatalogFilterOptions): T[] {
+  let next = products;
+  if (opts.q) {
+    next = next.filter((product) =>
+      matchesQuery(
+        [
+          product.name,
+          product.brand,
+          product.description,
+          product.tags,
+          product.promoCodes.map((code) => `${code.code} ${code.label}`),
+        ],
+        opts.q,
+      ),
+    );
+  }
+  if (opts.dealsOnly) next = next.filter((product) => product.discountPercent > 0);
+  if (opts.minPrice != null) next = next.filter((product) => product.price >= opts.minPrice!);
+  if (opts.maxPrice != null) next = next.filter((product) => product.price <= opts.maxPrice!);
+  if (opts.minDiscount != null) next = next.filter((product) => product.discountPercent >= opts.minDiscount!);
+  return next;
 }

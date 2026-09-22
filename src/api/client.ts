@@ -6,7 +6,6 @@ import type {
   Product,
   ProductQuery,
   ScanSummary,
-  TagCount,
 } from "../types";
 import { apiBase, isNativeApp } from "../lib/native";
 
@@ -108,7 +107,6 @@ export const api = {
   products: (params: ProductQuery = {}) => {
     const search = new URLSearchParams();
     if (params.q) search.set("q", params.q);
-    if (params.tag) search.set("tag", params.tag);
     if (params.deals) search.set("deals", "1");
     if (params.minPrice != null) search.set("minPrice", String(params.minPrice));
     if (params.maxPrice != null) search.set("maxPrice", String(params.maxPrice));
@@ -116,10 +114,9 @@ export const api = {
     if (params.sort) search.set("sort", params.sort);
     if (params.limit != null) search.set("limit", String(params.limit));
     const qs = search.toString();
-    return request<{ products: Product[]; query: string; tag: string }>(`/api/products${qs ? `?${qs}` : ""}`);
+    return request<{ products: Product[]; query: string }>(`/api/products${qs ? `?${qs}` : ""}`);
   },
   product: (id: string) => request<{ product: Product }>(`/api/products/${encodeURIComponent(id)}`),
-  tags: () => request<{ tags: TagCount[] }>("/api/tags"),
   deals: () => request<{ products: Product[]; lastScan: ScanSummary | null }>("/api/deals"),
   scan: (force: "restock" | "drop" | "cycle" = "cycle") =>
     request<{ summary: ScanSummary }>("/api/deals/scan", {

@@ -92,13 +92,6 @@ export function ProductCover({
             Restock: {product.restockEstimate ?? "unknown / may not return"}
           </p>
         ) : null}
-        <div className="tag-row">
-          {product.tags.slice(0, variant === "grid" ? 3 : 6).map((tag) => (
-            <Link key={tag} className="tag" to={`/search?tag=${encodeURIComponent(tag)}`}>
-              {tag}
-            </Link>
-          ))}
-        </div>
         <ShopLink className="shop-link" href={product.productUrl}>
           Shop {promo ? `with ${promo.code}` : "now"}
         </ShopLink>

@@ -435,27 +435,6 @@ img {
   color: var(--gold-text);
 }
 
-.tag-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.tag {
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 0.2rem 0.6rem;
-  font-size: 0.72rem;
-  color: var(--muted);
-  background: rgb(var(--bg-rgb) / 0.35);
-}
-.tag:hover,
-.tag:focus-visible,
-.tag[aria-current="page"] {
-  color: var(--gold-text-bright);
-  border-color: var(--gold);
-}
-
 .cover-actions {
   position: absolute;
   top: max(5.4rem, calc(env(safe-area-inset-top) + 4.6rem));
@@ -661,13 +640,6 @@ img {
   box-shadow: 0 0 22px rgb(var(--gold-rgb) / 0.28);
 }
 
-.tag-cloud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  margin-bottom: 1.25rem;
-}
-
 .sr-only {
   position: absolute;
   width: 1px;
@@ -815,11 +787,6 @@ img {
   box-shadow: 0 0 28px rgb(var(--gold-rgb) / 0.16);
 }
 
-.search-hero .tag-cloud {
-  justify-content: center;
-  max-width: 36rem;
-}
-
 .explore-snap {
   display: grid;
   place-items: center;
@@ -839,11 +806,6 @@ img {
 
 .explore-snap .lede {
   margin: 0;
-}
-
-.explore-tags {
-  justify-content: center;
-  margin-top: 0.4rem;
 }
 
 .badge.settings-dot {
@@ -1134,9 +1096,17 @@ img {
 
 .advisor-chip {
   cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.72rem;
   background: var(--chip-bg);
   color: var(--gold-text);
-  border-color: var(--line);
+}
+.advisor-chip:hover,
+.advisor-chip:focus-visible {
+  color: var(--gold-text-bright);
+  border-color: var(--gold);
 }
 
 .advisor-bubble {

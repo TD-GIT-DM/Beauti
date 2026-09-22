@@ -1,17 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  advisorSystemPrompt,
+  advisorUserPrompt,
   catalogShortlist,
+  clientAdvisorProducts,
   effectiveQuestion,
   emptyCatalogReply,
   expandAdvisorQuery,
   groundAdvisorPick,
   parseAdvisorJson,
   templateReply,
+  type AdvisorCatalogProduct,
 } from "./advisor.ts";
-import type { AdvisorProduct } from "../types.ts";
 
-function product(partial: Partial<AdvisorProduct> & Pick<AdvisorProduct, "id" | "name" | "brand">): AdvisorProduct {
+function product(
+  partial: Partial<AdvisorCatalogProduct> & Pick<AdvisorCatalogProduct, "id" | "name" | "brand">,
+): AdvisorCatalogProduct {
   return {
     description: "",
     imageUrl: "",
@@ -173,4 +178,44 @@ test("template reply names catalog products only", () => {
   assert.match(reply, /\$88\.00/);
   assert.match(reply, /in stock/);
   assert.doesNotMatch(reply, /Chanel/);
+});
+
+test("private tags still retrieve blush when the name does not say blush", () => {
+  const row = product({
+    id: "rare-soft-pinch",
+    name: "Soft Pinch Liquid",
+    brand: "Rare Beauty",
+    description: "A weightless cream color for cheeks.",
+    tags: ["blush", "zz-private-label"],
+  });
+  const picks = catalogShortlist([row], "blush");
+  assert.deepEqual(
+    picks.map((item) => item.id),
+    ["rare-soft-pinch"],
+  );
+});
+
+test("shopper-facing advisor copy does not point at tags", () => {
+  assert.doesNotMatch(templateReply([]), /tag/i);
+  assert.doesNotMatch(emptyCatalogReply(expandAdvisorQuery("best iphone case")), /tag/i);
+  assert.doesNotMatch(emptyCatalogReply(expandAdvisorQuery("   ")), /tag/i);
+  assert.match(advisorSystemPrompt(), /do not mention product tags/i);
+});
+
+test("the model prompt and client cards omit private tags", () => {
+  const row = product({
+    id: "rare-soft-pinch",
+    name: "Soft Pinch Liquid",
+    brand: "Rare Beauty",
+    description: "A weightless cream color for cheeks.",
+    tags: ["blush", "zz-private-label"],
+  });
+  const prompt = advisorUserPrompt("blush", [row]);
+  assert.doesNotMatch(prompt, /zz-private-label/);
+  assert.doesNotMatch(prompt, /\btags\b/i);
+  const [pub] = clientAdvisorProducts([row]);
+  assert.ok(pub);
+  assert.equal("tags" in pub, false);
+  assert.equal(JSON.stringify(pub).includes("zz-private-label"), false);
+  assert.equal(pub.id, "rare-soft-pinch");
 });

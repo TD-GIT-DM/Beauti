@@ -1,5 +1,6 @@
 import { Hono } from "hono";
-import { matchesQuery, parseOptionalNumber, parseSort, relevanceScore } from "../src/lib/search";
+import { omitStoredTags } from "../src/lib/public-product";
+import { filterCatalog, parseOptionalNumber, parseSort, relevanceScore } from "../src/lib/search";
 import { scanDeals } from "../src/services/deals";
 import {
   accountScope,
@@ -102,7 +103,6 @@ api.post("/api/advisor", async (c) => {
 
 api.get("/api/products", async (c) => {
   const q = (c.req.query("q") ?? "").trim();
-  const tag = (c.req.query("tag") ?? "").trim().toLowerCase();
   const dealsOnly = c.req.query("deals") === "1";
   const minPrice = parseOptionalNumber(c.req.query("minPrice"));
   const maxPrice = parseOptionalNumber(c.req.query("maxPrice"));
@@ -117,11 +117,16 @@ api.get("/api/products", async (c) => {
   ).all<ProductRow>();
 
   let products = await decorateProducts(c.env.DB, results ?? [], loved);
-  products = filterCatalog(products, { q, tag, dealsOnly, minPrice, maxPrice, minDiscount });
+  // `tag` is ignored. Stored tags still match inside `q`.
+  products = filterCatalog(products, { q, dealsOnly, minPrice, maxPrice, minDiscount });
   products = sortCatalog(products, sort, q);
   if (limit && limit > 0) products = products.slice(0, Math.min(Math.floor(limit), 200));
 
-  return json({ products, query: q, tag, minPrice, maxPrice, minDiscount, sort }, {}, { deviceId });
+  return json(
+    { products: products.map(omitStoredTags), query: q, minPrice, maxPrice, minDiscount, sort },
+    {},
+    { deviceId },
+  );
 });
 
 api.get("/api/products/:id", async (c) => {
@@ -132,25 +137,7 @@ api.get("/api/products/:id", async (c) => {
   const loved = await lovedFor(c, deviceId, user);
   const priceHistory = await loadHistory(c.env.DB, id);
   const product = withDiscount(mapProduct(row, { priceHistory, wishlisted: loved.has(id) }));
-  return json({ product }, {}, { deviceId });
-});
-
-api.get("/api/tags", async (c) => {
-  const { results } = await c.env.DB.prepare(`SELECT tags FROM products`).all<{ tags: string }>();
-  const counts = new Map<string, number>();
-  for (const row of results ?? []) {
-    try {
-      for (const tag of JSON.parse(row.tags) as string[]) {
-        counts.set(tag, (counts.get(tag) ?? 0) + 1);
-      }
-    } catch {
-      /* ignore malformed */
-    }
-  }
-  const tags = [...counts.entries()]
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-  return json({ tags });
+  return json({ product: omitStoredTags(product) }, {}, { deviceId });
 });
 
 api.get("/api/deals", async (c) => {
@@ -158,7 +145,7 @@ api.get("/api/deals", async (c) => {
   const loved = await lovedFor(c, deviceId, user);
   const { results } = await c.env.DB.prepare(`SELECT * FROM products`).all<ProductRow>();
   const ranked = sortCatalog(await decorateProducts(c.env.DB, results ?? [], loved), "discount_desc");
-  const products = pickTopDeals(ranked, 5);
+  const products = pickTopDeals(ranked, 5).map(omitStoredTags);
   const lastScan = await c.env.DEALS_CACHE.get("deals:last-scan");
   return json(
     {
@@ -196,7 +183,11 @@ api.get("/api/wishlist", async (c) => {
     .bind(...loved)
     .all<ProductRow>();
   return json(
-    { products: await decorateProducts(c.env.DB, results ?? [], loved), deviceId, account: Boolean(user) },
+    {
+      products: (await decorateProducts(c.env.DB, results ?? [], loved)).map(omitStoredTags),
+      deviceId,
+      account: Boolean(user),
+    },
     {},
     { deviceId },
   );
@@ -410,44 +401,6 @@ api.patch("/api/settings", async (c) => {
     { deviceId },
   );
 });
-
-function filterCatalog(
-  products: ProductRecord[],
-  opts: {
-    q: string;
-    tag: string;
-    dealsOnly: boolean;
-    minPrice?: number;
-    maxPrice?: number;
-    minDiscount?: number;
-  },
-): ProductRecord[] {
-  let next = products;
-  if (opts.q) {
-    next = next.filter((p) =>
-      matchesQuery(
-        [
-          p.name,
-          p.brand,
-          p.description,
-          p.tags,
-          p.promoCodes.map((code) => `${code.code} ${code.label}`),
-        ],
-        opts.q,
-      ),
-    );
-  }
-  if (opts.tag) {
-    next = next.filter((p) => p.tags.some((t) => t.toLowerCase() === opts.tag));
-  }
-  if (opts.dealsOnly) {
-    next = next.filter((p) => p.discountPercent > 0);
-  }
-  if (opts.minPrice != null) next = next.filter((p) => p.price >= opts.minPrice!);
-  if (opts.maxPrice != null) next = next.filter((p) => p.price <= opts.maxPrice!);
-  if (opts.minDiscount != null) next = next.filter((p) => p.discountPercent >= opts.minDiscount!);
-  return next;
-}
 
 /**
  * Home five: real markdowns first (unique pack shots), then honest full-price

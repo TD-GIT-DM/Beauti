@@ -1,5 +1,11 @@
+import { omitStoredTags } from "./public-product.ts";
 import { tokenizeQuery } from "./search.ts";
 import type { AdvisorProduct, AdvisorSearchHint } from "../types.ts";
+
+/** Server-side catalog row. `tags` stay here for retrieval and are stripped before a client response. */
+export interface AdvisorCatalogProduct extends AdvisorProduct {
+  tags: string[];
+}
 
 export const ADVISOR_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 export const ADVISOR_SHORTLIST_LIMIT = 14;
@@ -159,7 +165,11 @@ export function expandAdvisorQuery(question: string): AdvisorQuery {
   };
 }
 
-export function advisorScore(product: AdvisorProduct, query: AdvisorQuery): number {
+export function clientAdvisorProducts(products: AdvisorCatalogProduct[]): AdvisorProduct[] {
+  return products.map((product) => omitStoredTags(product));
+}
+
+export function advisorScore(product: AdvisorCatalogProduct, query: AdvisorQuery): number {
   if (!query.expanded.length || !hasCatalogHit(product, query)) return 0;
   const name = product.name.toLowerCase();
   const brand = product.brand.toLowerCase();
@@ -177,7 +187,7 @@ export function advisorScore(product: AdvisorProduct, query: AdvisorQuery): numb
   return score;
 }
 
-function hasCatalogHit(product: AdvisorProduct, query: AdvisorQuery): boolean {
+function hasCatalogHit(product: AdvisorCatalogProduct, query: AdvisorQuery): boolean {
   const name = product.name.toLowerCase();
   const brand = product.brand.toLowerCase();
   const tags = product.tags.map((tag) => tag.toLowerCase());
@@ -197,7 +207,11 @@ function familyKey(product: AdvisorProduct): string {
   )}`;
 }
 
-export function catalogShortlist(products: AdvisorProduct[], question: string, limit = ADVISOR_SHORTLIST_LIMIT): AdvisorProduct[] {
+export function catalogShortlist(
+  products: AdvisorCatalogProduct[],
+  question: string,
+  limit = ADVISOR_SHORTLIST_LIMIT,
+): AdvisorCatalogProduct[] {
   const query = expandAdvisorQuery(question);
   const scored = products
     .map((product) => ({ product, score: advisorScore(product, query) }))
@@ -208,7 +222,7 @@ export function catalogShortlist(products: AdvisorProduct[], question: string, l
       return b.score - a.score || a.product.name.localeCompare(b.product.name);
     });
 
-  const picked: AdvisorProduct[] = [];
+  const picked: AdvisorCatalogProduct[] = [];
   const familyCount = new Map<string, number>();
   for (const row of scored) {
     const family = familyKey(row.product);
@@ -258,9 +272,9 @@ export function parseAdvisorJson(raw: unknown): AdvisorPick | null {
 
 export function groundAdvisorPick(
   pick: AdvisorPick | null,
-  shortlist: AdvisorProduct[],
+  shortlist: AdvisorCatalogProduct[],
   query: AdvisorQuery,
-): { reply: string; products: AdvisorProduct[]; searchHint: AdvisorSearchHint | null; weak: boolean } {
+): { reply: string; products: AdvisorCatalogProduct[]; searchHint: AdvisorSearchHint | null; weak: boolean } {
   const byId = new Map(shortlist.map((product) => [product.id, product]));
   const products = pickCatalogProducts(pick?.productIds ?? [], byId, ADVISOR_PICK_LIMIT);
   const weak = shortlist.length > 0 && Math.max(...shortlist.map((p) => advisorScore(p, query))) < 6;
@@ -279,7 +293,7 @@ export function groundAdvisorPick(
 
 export function templateReply(products: AdvisorProduct[], weak = false): string {
   if (!products.length) {
-    return "Nothing in the Beauti catalog matches that. Try a tag like lipstick, fragrance, or skincare.";
+    return "Nothing in the Beauti catalog matches that. Try lipstick, fragrance, or skincare.";
   }
   const bits = products.slice(0, 3).map((product) => {
     return `${product.brand} ${product.name} (${formatAdvisorPrice(product.price, product.currency)}, ${stockPhrase(product.availability)}).`;
@@ -294,9 +308,9 @@ export function emptyCatalogReply(query: AdvisorQuery): string {
   }
   const hint = query.searchHint?.q;
   if (hint) {
-    return `Nothing in the Beauti catalog matches that. Search “${hint}” or browse related in-catalog tags.`;
+    return `Nothing in the Beauti catalog matches that. Search “${hint}”.`;
   }
-  return "Nothing in the Beauti catalog matches that. Try searching tags or browse related in-catalog items.";
+  return "Nothing in the Beauti catalog matches that. Try a product name, brand, or scent.";
 }
 
 export function advisorSystemPrompt(): string {
@@ -304,7 +318,7 @@ export function advisorSystemPrompt(): string {
     "You are Beauti's in-catalog product matcher.",
     "Recommend only products in CATALOG. Never invent brands, names, prices, or ids.",
     "Beauty advice is product matching only. Do not diagnose skin or medical conditions.",
-    "If nothing fits, say so and suggest searching in-catalog tags. Do not mention off-catalog items.",
+    "If nothing fits, say so and suggest a product type, brand, or scent. Do not mention product tags or off-catalog items.",
     "Write short plain sentences. No filler. No em dashes.",
     "Name brand, product, price, and availability for each pick.",
     'Return JSON only: {"reply": string, "productIds": string[]}.',
@@ -322,22 +336,21 @@ export function advisorUserPrompt(
     .map((m) => `${m.role}: ${clampAdvisorMessage(m.content)}`)
     .join("\n");
   const rows = shortlist.map((p) => {
-    const tags = p.tags.slice(0, 8).join(",");
     const desc = p.description.replace(/\s+/g, " ").slice(0, 160);
-    return `${p.id} | ${p.brand} | ${p.name} | ${formatAdvisorPrice(p.price, p.currency)} | ${p.availability} | ${tags} | ${desc}`;
+    return `${p.id} | ${p.brand} | ${p.name} | ${formatAdvisorPrice(p.price, p.currency)} | ${p.availability} | ${desc}`;
   });
   return [
     `Question: ${clampAdvisorMessage(question)}`,
     prior ? `Prior turns:\n${prior}` : "",
-    "CATALOG (id | brand | name | price | availability | tags | description):",
+    "CATALOG (id | brand | name | price | availability | description):",
     rows.join("\n"),
   ]
     .filter(Boolean)
     .join("\n\n");
 }
 
-function pickCatalogProducts(ids: string[], byId: Map<string, AdvisorProduct>, limit: number): AdvisorProduct[] {
-  const out: AdvisorProduct[] = [];
+function pickCatalogProducts(ids: string[], byId: Map<string, AdvisorCatalogProduct>, limit: number): AdvisorCatalogProduct[] {
+  const out: AdvisorCatalogProduct[] = [];
   const seen = new Set<string>();
   for (const id of ids) {
     const product = byId.get(id);
