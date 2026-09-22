@@ -4,7 +4,7 @@
  * `products.json`). Never scrape storefront HTML; never invent stock.
  */
 
-import { honestDealScore } from "../../lib/discount";
+import { honestDealScore } from "../../lib/discount.ts";
 import type { Availability, CatalogProduct, DealSnapshot } from "./types";
 
 export const CATALOG_UA =
@@ -76,7 +76,7 @@ export function shopifyJsUrl(productUrl: string): string | null {
   if (!m) return null;
   try {
     const parsed = new URL(url);
-    return `${parsed.protocol}//${parsed.host}/products/${m[1]}.js`;
+    return `${parsed.protocol}//${parsed.host}/products/${m[1]}.js?currency=USD`;
   } catch {
     return null;
   }
@@ -136,11 +136,14 @@ function moneyValues(raw: unknown): number[] {
   return out;
 }
 
-function shopifyCents(raw: unknown): number | null {
+/** `.js` prices are integer cents. `products.json` prices are dollar strings. */
+function shopifyMoney(raw: unknown, unit: "cents" | "dollars"): number | null {
   if (raw == null || raw === "" || raw === 0 || raw === "0") return null;
   const n = typeof raw === "number" ? raw : Number.parseFloat(String(raw));
   if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.round(n) / 100;
+  const value = unit === "cents" ? n / 100 : n;
+  if (value <= 0 || value >= 20_000) return null;
+  return Math.round(value * 100) / 100;
 }
 
 function roundMoney(n: number): number {
@@ -320,6 +323,111 @@ export function stockFromShopify(
   };
 }
 
+const SIZE_PENALTY = new Set(["mini", "sample", "deluxe", "travel", "gift", "set", "points", "sachet", "refill", "jumbo"]);
+
+interface PriceOffer {
+  price: number;
+  listPrice: number;
+  title?: string;
+}
+
+function offerTokens(text: string): Set<string> {
+  return new Set(
+    (text || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .split(/\s+/)
+      .filter((t) => t.length > 2),
+  );
+}
+
+/**
+ * Sale figure that only repeats the bottom of a multi-price list (onSale NONE).
+ * That is the range low end, not a markdown.
+ */
+function isPhantomRangeSale(lists: number[], sales: number[], onSale: boolean): boolean {
+  if (onSale || !lists.length || !sales.length) return false;
+  const minList = Math.min(...lists);
+  const maxList = Math.max(...lists);
+  const maxSale = Math.max(...sales);
+  return maxList > minList + 0.009 && maxSale <= minList + 0.009;
+}
+
+/** Same size as the catalog row. Prefer a real compare-at when it is the closer offer. */
+function pickOffer(offers: PriceOffer[], catalogName: string, prior: number | null): PriceOffer {
+  const tokens = offerTokens(catalogName);
+  const wantPenalty = new Set([...tokens].filter((t) => SIZE_PENALTY.has(t)));
+  let pool = offers.filter((offer) => {
+    const extra = [...offerTokens(offer.title ?? "")].filter((t) => SIZE_PENALTY.has(t) && !wantPenalty.has(t));
+    return extra.length === 0;
+  });
+  if (!pool.length) pool = offers;
+
+  const shade = [...tokens].filter(
+    (t) => !SIZE_PENALTY.has(t) && !["the", "and", "for", "with", "eau", "parfum", "perfume"].includes(t),
+  );
+  if (shade.length) {
+    const hits = pool.filter((offer) => {
+      const titleTokens = offerTokens(offer.title ?? "");
+      if (!titleTokens.size) return false;
+      return shade.some((t) => titleTokens.has(t));
+    });
+    if (hits.length && hits.length < pool.length) pool = hits;
+  }
+
+  if (isMiniName(catalogName)) return pool.reduce((a, b) => (a.price < b.price ? a : b));
+  if (prior == null || prior <= 0) return pool[0];
+  return pool.reduce((best, offer) => {
+    const dist = Math.min(Math.abs(offer.price - prior), Math.abs(offer.listPrice - prior));
+    const bestDist = Math.min(Math.abs(best.price - prior), Math.abs(best.listPrice - prior));
+    if (dist < bestDist - 0.009) return offer;
+    if (Math.abs(dist - bestDist) <= 0.009 && Math.abs(offer.listPrice - prior) <= 0.02) {
+      const cut = offer.listPrice - offer.price;
+      const bestCut = best.listPrice - best.price;
+      if (cut > bestCut + 0.009) return offer;
+    }
+    return best;
+  });
+}
+
+function sameSize(prior: number, candidate: number): boolean {
+  return Math.abs(prior - candidate) <= Math.max(3, candidate * 0.12);
+}
+
+/**
+ * Sephora search cards publish size endpoints ("$50 - $450"), not every ml.
+ * Keep a mid-size catalog price that sits inside the range. Snap only when
+ * the stored price is the same size as an endpoint, or the card has one price.
+ */
+function chooseSephoraOffer(offers: PriceOffer[], catalogName: string, prior: number | null): PriceOffer {
+  if (isMiniName(catalogName)) return offers.reduce((a, b) => (a.price < b.price ? a : b));
+  if (offers.length === 1) return offers[0];
+  if (prior == null || prior <= 0) return offers[offers.length - 1];
+  const lists = offers.map((offer) => offer.listPrice);
+  const lo = Math.min(...lists);
+  const hi = Math.max(...lists);
+  if (prior < lo - 0.51) return offers.reduce((a, b) => (a.price < b.price ? a : b));
+  if (prior > hi + 0.51) return offers.reduce((a, b) => (a.listPrice > b.listPrice ? a : b));
+  const near = offers.filter((offer) => sameSize(prior, offer.price) || sameSize(prior, offer.listPrice));
+  if (near.length) {
+    return near.reduce((best, offer) => {
+      const dist = Math.min(Math.abs(offer.price - prior), Math.abs(offer.listPrice - prior));
+      const bestDist = Math.min(Math.abs(best.price - prior), Math.abs(best.listPrice - prior));
+      if (dist < bestDist - 0.009) return offer;
+      if (offer.listPrice - offer.price > best.listPrice - best.price + 0.009 && sameSize(prior, offer.listPrice)) {
+        return offer;
+      }
+      return best;
+    });
+  }
+  const discs = new Set(offers.map((offer) => Math.round(((offer.listPrice - offer.price) / offer.listPrice) * 100)));
+  if (discs.size === 1 && prior > lo && prior < hi) {
+    const disc = [...discs][0];
+    if (disc > 0) return { price: roundMoney(prior * (1 - disc / 100)), listPrice: roundMoney(prior) };
+  }
+  return { price: roundMoney(prior), listPrice: roundMoney(prior) };
+}
+
 export function pricesFromSephoraProduct(
   product: Record<string, unknown>,
   catalogName: string,
@@ -331,47 +439,75 @@ export function pricesFromSephoraProduct(
   const onSale = String(product.onSaleData ?? "NONE").toUpperCase() !== "NONE";
   if (!lists.length && !sales.length) return null;
 
-  const pick = (vals: number[]): number => {
-    const uniq = [...new Set(vals.map(roundMoney))].sort((a, b) => a - b);
-    if (isMiniName(catalogName)) return uniq[0];
-    if (prior == null) return uniq[uniq.length - 1];
-    const nearest = uniq.reduce((best, v) => (Math.abs(v - prior) < Math.abs(best - prior) ? v : best));
-    return nearest;
-  };
-
-  const realSale = sales.length > 0 && (onSale || (lists.length > 0 && Math.min(...sales) + 0.009 < Math.max(...lists)));
+  const phantom = isPhantomRangeSale(lists, sales, onSale);
+  const realSale =
+    !phantom &&
+    sales.length > 0 &&
+    (onSale || (lists.length > 0 && Math.min(...sales) + 0.009 < Math.max(...lists)));
   if (realSale) {
-    const listed = lists.length ? pick(lists) : pick(sales);
-    let current = Math.min(...sales);
-    if (lists.length === sales.length) {
-      const idx = lists.reduce((best, v, i) => (Math.abs(v - listed) < Math.abs(lists[best] - listed) ? i : best), 0);
-      current = sales[idx];
+    const ls = [...new Set((lists.length ? lists : sales).map(roundMoney))].sort((a, b) => a - b);
+    const ss = [...new Set(sales.map(roundMoney))].sort((a, b) => a - b);
+    let offers: PriceOffer[];
+    if (ls.length === ss.length) {
+      offers = ls.map((listed, i) => ({ price: Math.min(ss[i], listed), listPrice: listed }));
+    } else if (ls.length >= 2 && ss.length >= 2 && Math.max(...ls) > Math.min(...ls)) {
+      const loL = Math.min(...ls);
+      const hiL = Math.max(...ls);
+      const loS = Math.min(...ss);
+      const hiS = Math.max(...ss);
+      offers = ls.map((listed) => {
+        const t = (listed - loL) / (hiL - loL);
+        const current = loS + t * (hiS - loS);
+        return { price: roundMoney(Math.min(current, listed)), listPrice: roundMoney(listed) };
+      });
+    } else {
+      const listed = ls[ls.length - 1];
+      offers = [{ price: roundMoney(Math.min(Math.min(...ss), listed)), listPrice: roundMoney(listed) }];
     }
-    if (current > listed) current = listed;
-    return { price: roundMoney(current), listPrice: roundMoney(listed) };
+    const chosen = chooseSephoraOffer(offers, catalogName, prior);
+    if (chosen.price + 0.009 >= chosen.listPrice) {
+      return { price: roundMoney(chosen.listPrice), listPrice: roundMoney(chosen.listPrice) };
+    }
+    return { price: roundMoney(chosen.price), listPrice: roundMoney(chosen.listPrice) };
   }
-  const current = pick(lists.length ? lists : sales);
-  return { price: roundMoney(current), listPrice: roundMoney(current) };
+  const currentVals = [...new Set((lists.length ? lists : sales).map(roundMoney))].sort((a, b) => a - b);
+  const chosen = chooseSephoraOffer(
+    currentVals.map((n) => ({ price: n, listPrice: n })),
+    catalogName,
+    prior,
+  );
+  return { price: roundMoney(chosen.price), listPrice: roundMoney(chosen.price) };
 }
 
 export function pricesFromShopify(
   data: Record<string, unknown>,
   catalogName: string,
+  prior: number | null = null,
+  unit: "cents" | "dollars" = "cents",
 ): { price: number; listPrice: number } | null {
   const variants = (data.variants as Record<string, unknown>[] | undefined) ?? [];
-  const rows: Array<{ price: number; listed: number }> = [];
+  const rows: PriceOffer[] = [];
   for (const v of variants.length ? variants : [data]) {
-    const price = shopifyCents(v.price);
+    const price = shopifyMoney(v.price, unit);
     if (price == null) continue;
-    const compare = shopifyCents(v.compare_at_price);
+    const compare = shopifyMoney(v.compare_at_price, unit);
     const listed = compare && compare > price ? compare : price;
-    rows.push({ price, listed });
+    rows.push({
+      price,
+      listPrice: listed,
+      title: String(v.title ?? v.option1 ?? ""),
+    });
   }
   if (!rows.length) return null;
-  const chosen = isMiniName(catalogName)
-    ? rows.reduce((a, b) => (a.price < b.price ? a : b))
-    : rows.reduce((a, b) => (a.price > b.price ? a : b));
-  return { price: roundMoney(chosen.price), listPrice: roundMoney(chosen.listed) };
+  const chosen = pickOffer(rows, catalogName, prior);
+  return { price: roundMoney(chosen.price), listPrice: roundMoney(chosen.listPrice) };
+}
+
+/** Fuzzy brand-shop matches must stay on the same size. Exact PDPs may move further. */
+export function priceNearCatalog(price: number, listPrice: number, prior: number | null): boolean {
+  if (prior == null || prior <= 0) return true;
+  const near = (n: number) => Math.abs(n - prior) / prior <= 0.45;
+  return near(price) || near(listPrice);
 }
 
 export function snapshotFromQuote(product: CatalogProduct, quote: CatalogQuote): DealSnapshot {
@@ -427,6 +563,16 @@ export function matchShopifyProducts(
   return ranked.slice(0, 12).map((row) => row.product);
 }
 
+/** Share of URL-handle tokens that also appear on the Shopify product handle. */
+export function handleOverlap(productUrl: string, product: Record<string, unknown>): number {
+  const handle = SHOPIFY_HANDLE_RE.exec(productUrl || "")?.[1] ?? "";
+  const other = String(product.handle ?? "");
+  const a = offerTokens(handle.replace(/[-_]/g, " "));
+  const b = offerTokens(other.replace(/[-_]/g, " "));
+  if (!a.size || !b.size) return 0;
+  return [...a].filter((token) => b.has(token)).length / a.size;
+}
+
 export function matchShopifyProduct(
   name: string,
   brand: string,
@@ -472,11 +618,16 @@ export async function loadShopifyShopProducts(
   cache: Map<string, Record<string, unknown>[]>,
 ): Promise<Record<string, unknown>[]> {
   if (cache.has(origin)) return cache.get(origin) ?? [];
-  const data = (await fetchJson(`${origin}/products.json?limit=250`, {
-    timeoutMs: 10_000,
-    referer: `${origin}/`,
-  })) as { products?: Record<string, unknown>[] } | null;
-  const products = Array.isArray(data?.products) ? data.products : [];
+  const products: Record<string, unknown>[] = [];
+  for (let page = 1; page <= 4; page++) {
+    const data = (await fetchJson(`${origin}/products.json?limit=250&page=${page}&currency=USD`, {
+      timeoutMs: 10_000,
+      referer: `${origin}/`,
+    })) as { products?: Record<string, unknown>[] } | null;
+    const batch = Array.isArray(data?.products) ? data.products : [];
+    products.push(...batch);
+    if (batch.length < 250) break;
+  }
   cache.set(origin, products);
   return products;
 }
@@ -501,8 +652,10 @@ export async function quoteCatalogProduct(
     }
     const stock = stockFromShopify(data, product.name);
     if (stock?.explicit) {
-      const prices = data ? pricesFromShopify(data, product.name) : null;
-      return { ...stock, source: `shopify-js:${jsUrl}`, ...(prices ?? {}) };
+      const prices = data ? pricesFromShopify(data, product.name, product.price, "cents") : null;
+      const priced =
+        prices && priceNearCatalog(prices.price, prices.listPrice, product.price) ? prices : undefined;
+      return { ...stock, source: `shopify-js:${jsUrl}`, ...(priced ?? {}) };
     }
   }
 
@@ -542,7 +695,26 @@ export async function quoteCatalogProduct(
       .filter((row): row is StockRead => Boolean(row?.explicit));
     if (flags.length) {
       const avail = flags.some((row) => row.availability !== "out_of_stock") ? "in_stock" : "out_of_stock";
-      return { availability: avail, restockEstimate: null, source: `shopify-products:${origin}`, explicit: true };
+      let originHost = "";
+      try {
+        originHost = new URL(origin).host;
+      } catch {
+        originHost = "";
+      }
+      const linkedHere = originHost && url.includes(originHost);
+      const priced = linkedHere
+        ? matches
+            .filter((row) => handleOverlap(url, row) >= 0.45)
+            .map((row) => pricesFromShopify(row, product.name, product.price, "dollars"))
+            .find((row) => row && priceNearCatalog(row.price, row.listPrice, product.price))
+        : undefined;
+      return {
+        availability: avail,
+        restockEstimate: null,
+        source: `shopify-products:${origin}`,
+        explicit: true,
+        ...(priced ?? {}),
+      };
     }
   }
 
