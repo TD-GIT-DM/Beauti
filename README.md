@@ -52,6 +52,7 @@ Open [http://localhost:5173](http://localhost:5173).
 | `npm run catalog:generate:0008` | Write `0008_real_product_urls.sql` from that JSON |
 | `npm run catalog:resolve-prices` | Sephora catalog JSON + Shopify product JSON + known MSRP → `scripts/data/honest-prices.json` |
 | `npm run catalog:generate:0009` | Write `0009_honest_prices.sql` from that JSON |
+| `npm run catalog:generate:0012` | Write `0012_confirm_prices.sql` for rows whose price or list changed |
 | `npm run catalog:test-prices` | Assert no invented promo codes; discount only when list > sale |
 | `npm run catalog:resolve-availability` | Sephora catalog JSON + Shopify product JSON → `scripts/data/availability.json` |
 | `npm run catalog:generate:0010` | Write `0010_sync_availability.sql` from that JSON |
@@ -77,7 +78,7 @@ That hits the same 15-minute Cron Trigger path: a rotating batch of SKUs is quot
 ## Catalog UX
 
 - **Home** — up to **five real markdowns** (list vs sale on the linked retailer/brand page), one product per viewport (scroll-snap). If fewer than five SKUs are actually on sale, the slate fills with honest best-price picks and **no fake % off badge**. Discount is never invented from seed promo codes or mock price-history peaks.
-- **Search** — `/search` is a dedicated tab (header magnifying glass). Empty state: **filter control at the top**, search bar **centered** in the viewport. Results: `/search?q=` / `tag=` plus price and discount filters.
+- **Search** — `/search` is a dedicated tab (header magnifying glass). Empty state: **filter control at the top**, search bar **centered** in the viewport. Results: `/search?q=` / `tag=` plus price and discount filters. Clicking a tag chip sets that tag and clears the free-text query (and price filters) so the result count matches the chip. Typing in the search box while a tag is active searches within that tag. Reset search and Clear filters drop the tag and the query.
 - Multi-word queries are **AND-tokenized** (`red lipstick` matches tags/name/description that contain both `red` and `lipstick`), then ranked so name and tag hits beat a mention in copy.
 - Out-of-stock products stay visible; the description includes a **restock estimate** (date range or “unknown / may not return”)
 - **Ask Beauti** — floating catalog advisor. Natural questions are matched against D1 products (tags, name, brand, description, availability), then Workers AI writes a short reply from that shortlist only. Cards open `/product/:id`. Off-catalog asks are refused. This is product matching, not medical advice.
@@ -166,12 +167,13 @@ npm run db:migrate:remote    # production D1 — applies pending files in migrat
 | `0008_real_product_urls.sql` | Replaces Google / fake `sephora.com/product/{beauti-id}` links with **verified retailer or brand PDPs** (**441 / 580**: 367 Sephora `-P` pages, 74 official brand PDPs). The other **139** SKUs get a path-only Sephora `/search/{slug}` or Ulta `/brand/{brand}` URL (no `?` in SQL). Do **not** `db.exec` this from `ensureCatalog`. |
 | `0009_honest_prices.sql` | Adds `list_price`, rewrites `price` / `promo_codes` / `deal_score` from Sephora catalog JSON, Shopify product JSON, or known MSRP. Clears invented seed coupons and fake price-history peaks. Do **not** `db.exec` this from `ensureCatalog`. |
 | `0010_sync_availability.sql` | Rewrites `availability` / `restock_estimate` / `deal_score` from the same catalog JSON sources. OOS SKUs keep a restock estimate only when the source provides one; in-stock clears stale estimates. Unverified rows are left unchanged. Do **not** `db.exec` this from `ensureCatalog`. |
+| `0012_confirm_prices.sql` | Batched `UPDATE`s for SKUs whose sell price or compare-at changed after a fresh Sephora / Shopify / brand `products.json` check. Raises an understated percent when a real compare-at exists. Clears a percent when the source has no compare-at. Do **not** `db.exec` this from `ensureCatalog`. |
 
 `INSERT OR IGNORE` so re-applying is safe on an already-seeded database.
 
 ### Apply `0008` to production D1
 
-`ensureCatalog` never runs `0008`, `0009`, or `0010` (same 100 KB / statement-volume limit that 500s 0004/0006/0007). Apply the files with Wrangler or Cloudflare MCP.
+`ensureCatalog` never runs `0008`, `0009`, `0010`, or `0012` (same 100 KB / statement-volume limit that 500s 0004/0006/0007). Apply the files with Wrangler or Cloudflare MCP.
 
 **Wrangler (preferred):**
 
@@ -205,8 +207,8 @@ python3 scripts/resolve-real-product-images.py      # Shopify/Wikimedia/CDN look
 node scripts/generate-real-product-images.mjs       # writes 0007 from that JSON
 python3 scripts/resolve-real-product-urls.py        # Sephora catalog JSON + HEAD checks → JSON
 node scripts/generate-real-product-urls.mjs         # writes 0008 from that JSON
-python3 scripts/resolve-honest-prices.py            # Sephora catalog + Shopify JSON + known MSRP → JSON
-node scripts/generate-honest-prices.mjs             # writes 0009 from that JSON
+python3 scripts/resolve-honest-prices.py            # Sephora catalog + Shopify JSON + brand products.json → JSON
+node scripts/generate-confirm-prices.mjs            # writes 0012 from that JSON
 python3 scripts/resolve-availability.py             # Sephora catalog + Shopify JSON → availability JSON
 node scripts/generate-availability.mjs              # writes 0010 from that JSON
 ```
@@ -216,20 +218,23 @@ node scripts/generate-availability.mjs              # writes 0010 from that JSON
 Prices must match the retailer/brand page we link to (or the lowest found current selling price from that source). Do not invent markdowns.
 
 ```bash
-npm run catalog:resolve-prices    # talks to Sephora catalog JSON + Shopify /products/{handle}.js
-npm run catalog:generate:0009     # rewrites migrations/0009_honest_prices.sql
+npm run catalog:resolve-prices    # Sephora catalog JSON + Shopify .js + brand products.json
+npm run catalog:generate:0012     # writes migrations/0012_confirm_prices.sql
 npm run catalog:test-prices
 npm run db:migrate:local          # or db:migrate:remote
 ```
 
+`0009_honest_prices.sql` already added `list_price`. Re-runs write **0012** (the next confirmation file) and only `UPDATE` rows whose `price` or `list_price` changed. Do not `db.exec` 0012 from `ensureCatalog`.
+
 `resolve-honest-prices.py` prefers:
 
-1. **Sephora catalog search JSON** for SKUs whose stored URL is a `-P` PDP (same API as the URL resolver)
-2. **Shopify product JSON** (`.js`) for official brand `/products/{handle}` URLs
-3. **Known list prices** in `scripts/data/known-list-prices.json` when neither feed matches
-4. Keep the existing catalog selling price and set `discountPercent: 0` / `promo_codes: []`
+1. **Sephora catalog search JSON** for SKUs whose stored URL is a `-P` PDP (same API as the URL resolver). `salePrice` counts only when it is below every `listPrice`. `valuePrice` is the compare-at when the sell price is a single list price.
+2. **Shopify product JSON** (`.js`, integer cents) for official brand `/products/{handle}` URLs
+3. **Brand `products.json`** (dollar strings, including `compare_at_price`) when the product title matches. A real compare-at raises an understated percent. It does not replace a linked full price with a lower unrelated price.
+4. **Known list prices** in `scripts/data/known-list-prices.json` when no feed matches
+5. Keep the existing catalog selling price and set `discountPercent: 0` / `promo_codes: []`
 
-A `% off` badge is emitted only when `list_price > price` (a real sale) or a promo is marked `verified`. The production cron **does** persist real price + availability from those JSON sources (rotating batch every 15 minutes). It does not persist mock price drops.
+A `% off` badge is emitted only when `list_price > price` (a real sale) or a promo is marked `verified`. The production cron persists real price + availability from those JSON sources (rotating batch every 15 minutes), including brand `products.json` compare-at prices. It does not persist mock price drops. The script prints `verified`, `flipped`, `fakeRemoved`, and `understatedRaised`.
 
 ### Re-run availability sync
 

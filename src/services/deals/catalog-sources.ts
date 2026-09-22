@@ -4,8 +4,20 @@
  * `products.json`). Never scrape storefront HTML; never invent stock.
  */
 
+import {
+  catalogTitleRank,
+  chooseVerifiedPrice,
+  isMiniName,
+  pricesFromSephoraProduct,
+  priceIsPlausible,
+  pricesFromShopify,
+  shopifyListingFits,
+  type VerifiedPrice,
+} from "../../lib/catalog-price";
 import { honestDealScore } from "../../lib/discount";
 import type { Availability, CatalogProduct, DealSnapshot } from "./types";
+
+export { pricesFromSephoraProduct, pricesFromShopify, chooseVerifiedPrice };
 
 export const CATALOG_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
@@ -15,7 +27,6 @@ const SEPHORA_SEARCH =
 
 const P_ID_RE = /[-/]P(\d+)/i;
 const SHOPIFY_HANDLE_RE = /\/products\/([^/?#]+)/i;
-const MONEY_RE = /\$?\s*([0-9]+(?:\.[0-9]+)?)/g;
 
 /** Brand → public Shopify origin (documented products.json / .js). */
 export const BRAND_SHOPS: Record<string, string> = {
@@ -120,36 +131,6 @@ export async function fetchJson(
   } finally {
     clearTimeout(timer);
   }
-}
-
-function moneyValues(raw: unknown): number[] {
-  if (raw == null) return [];
-  if (typeof raw === "number" && raw > 0 && raw < 20_000) return [raw];
-  const out: number[] = [];
-  const text = String(raw);
-  MONEY_RE.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = MONEY_RE.exec(text))) {
-    const n = Number(m[1]);
-    if (n > 0 && n < 20_000) out.push(n);
-  }
-  return out;
-}
-
-function shopifyCents(raw: unknown): number | null {
-  if (raw == null || raw === "" || raw === 0 || raw === "0") return null;
-  const n = typeof raw === "number" ? raw : Number.parseFloat(String(raw));
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.round(n) / 100;
-}
-
-function roundMoney(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
-function isMiniName(name: string): boolean {
-  const n = (name || "").toLowerCase();
-  return n.includes("mini") || n.includes("travel size") || n.includes("travel-size");
 }
 
 function boolish(raw: unknown): boolean | undefined {
@@ -320,65 +301,16 @@ export function stockFromShopify(
   };
 }
 
-export function pricesFromSephoraProduct(
-  product: Record<string, unknown>,
-  catalogName: string,
-  prior: number | null,
-): { price: number; listPrice: number } | null {
-  const cs = (product.currentSku as Record<string, unknown> | undefined) ?? {};
-  const lists = moneyValues(cs.listPrice);
-  const sales = moneyValues(cs.salePrice);
-  const onSale = String(product.onSaleData ?? "NONE").toUpperCase() !== "NONE";
-  if (!lists.length && !sales.length) return null;
-
-  const pick = (vals: number[]): number => {
-    const uniq = [...new Set(vals.map(roundMoney))].sort((a, b) => a - b);
-    if (isMiniName(catalogName)) return uniq[0];
-    if (prior == null) return uniq[uniq.length - 1];
-    const nearest = uniq.reduce((best, v) => (Math.abs(v - prior) < Math.abs(best - prior) ? v : best));
-    return nearest;
-  };
-
-  const realSale = sales.length > 0 && (onSale || (lists.length > 0 && Math.min(...sales) + 0.009 < Math.max(...lists)));
-  if (realSale) {
-    const listed = lists.length ? pick(lists) : pick(sales);
-    let current = Math.min(...sales);
-    if (lists.length === sales.length) {
-      const idx = lists.reduce((best, v, i) => (Math.abs(v - listed) < Math.abs(lists[best] - listed) ? i : best), 0);
-      current = sales[idx];
-    }
-    if (current > listed) current = listed;
-    return { price: roundMoney(current), listPrice: roundMoney(listed) };
-  }
-  const current = pick(lists.length ? lists : sales);
-  return { price: roundMoney(current), listPrice: roundMoney(current) };
-}
-
-export function pricesFromShopify(
-  data: Record<string, unknown>,
-  catalogName: string,
-): { price: number; listPrice: number } | null {
-  const variants = (data.variants as Record<string, unknown>[] | undefined) ?? [];
-  const rows: Array<{ price: number; listed: number }> = [];
-  for (const v of variants.length ? variants : [data]) {
-    const price = shopifyCents(v.price);
-    if (price == null) continue;
-    const compare = shopifyCents(v.compare_at_price);
-    const listed = compare && compare > price ? compare : price;
-    rows.push({ price, listed });
-  }
-  if (!rows.length) return null;
-  const chosen = isMiniName(catalogName)
-    ? rows.reduce((a, b) => (a.price < b.price ? a : b))
-    : rows.reduce((a, b) => (a.price > b.price ? a : b));
-  return { price: roundMoney(chosen.price), listPrice: roundMoney(chosen.listed) };
-}
-
 export function snapshotFromQuote(product: CatalogProduct, quote: CatalogQuote): DealSnapshot {
-  const price = quote.price ?? product.price;
-  const listPrice = quote.listPrice ?? product.listPrice ?? price;
-  const availability = quote.availability;
-  const restockEstimate = availability === "out_of_stock" ? quote.restockEstimate : null;
+  const hasPrice = quote.price != null && quote.price > 0 && quote.listPrice != null && quote.listPrice > 0;
+  const price = hasPrice ? quote.price! : product.price;
+  const listPrice = hasPrice ? quote.listPrice! : (product.listPrice ?? price);
+  const availability = quote.explicit ? quote.availability : product.availability;
+  const restockEstimate = quote.explicit
+    ? availability === "out_of_stock"
+      ? quote.restockEstimate
+      : null
+    : product.restockEstimate;
   return {
     productId: product.id,
     price,
@@ -391,39 +323,31 @@ export function snapshotFromQuote(product: CatalogProduct, quote: CatalogQuote):
   };
 }
 
-function tokens(text: string): Set<string> {
-  return new Set(
-    text
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, " ")
-      .split(/\s+/)
-      .filter((t) => t.length > 2 && !["the", "and", "for", "with"].includes(t)),
-  );
-}
-
-const SHOPIFY_PENALTY = new Set(["mini", "sample", "deluxe", "travel", "gift", "set", "points", "candle"]);
-
 export function matchShopifyProducts(
   name: string,
   brand: string,
   products: Array<Record<string, unknown>>,
+  preferredHandle?: string | null,
 ): Record<string, unknown>[] {
-  const q = tokens(`${brand} ${name}`);
-  const nameToks = tokens(name);
-  const wantPenalty = new Set([...nameToks].filter((t) => SHOPIFY_PENALTY.has(t)));
-  const ranked: Array<{ score: number; product: Record<string, unknown> }> = [];
+  void brand;
+  const want = (preferredHandle || "").toLowerCase();
+  const ranked: Array<{ extra: number; coverage: number; handleHit: number; product: Record<string, unknown> }> = [];
   for (const p of products) {
-    const title = String(p.title ?? p.handle ?? "");
-    const vendor = String(p.vendor ?? "");
-    const t = tokens(`${vendor} ${title}`);
-    const overlap = [...q].filter((x) => t.has(x)).length;
-    if (overlap < 2) continue;
-    let score = overlap / Math.max(q.size, 1);
-    const extraPen = [...tokens(title)].filter((x) => SHOPIFY_PENALTY.has(x) && !wantPenalty.has(x));
-    if (extraPen.length) score *= 0.25;
-    if (score >= 0.5) ranked.push({ score, product: p });
+    if (!shopifyListingFits(name, p)) continue;
+    const title = String(p.title ?? "");
+    const variants = Array.isArray(p.variants) ? (p.variants as Record<string, unknown>[]) : [];
+    const variantTitles = variants.map((variant) => String(variant.title ?? ""));
+    const rank = catalogTitleRank(name, title, variantTitles);
+    if (!rank) continue;
+    const handle = String(p.handle ?? "").toLowerCase();
+    ranked.push({
+      extra: rank.extra,
+      coverage: rank.coverage,
+      handleHit: want && handle === want ? 0 : 1,
+      product: p,
+    });
   }
-  ranked.sort((a, b) => b.score - a.score);
+  ranked.sort((a, b) => a.handleHit - b.handleHit || a.extra - b.extra || b.coverage - a.coverage);
   return ranked.slice(0, 12).map((row) => row.product);
 }
 
@@ -492,6 +416,10 @@ export async function quoteCatalogProduct(
   },
 ): Promise<CatalogQuote | null> {
   const url = product.productUrl ?? "";
+  const priceQuotes: VerifiedPrice[] = [];
+  let stock: StockRead | null = null;
+  let source = "";
+
   const jsUrl = shopifyJsUrl(url);
   if (jsUrl) {
     let data = caches.shopifyJs.get(jsUrl);
@@ -499,11 +427,16 @@ export async function quoteCatalogProduct(
       data = ((await fetchJson(jsUrl, { referer: url, timeoutMs: 8_000 })) as Record<string, unknown> | null) ?? null;
       caches.shopifyJs.set(jsUrl, data);
     }
-    const stock = stockFromShopify(data, product.name);
-    if (stock?.explicit) {
-      const prices = data ? pricesFromShopify(data, product.name) : null;
-      return { ...stock, source: `shopify-js:${jsUrl}`, ...(prices ?? {}) };
+    const jsStock = stockFromShopify(data, product.name);
+    if (jsStock?.explicit && !stock) {
+      stock = { ...jsStock, source: `shopify-js:${jsUrl}` };
+      source = stock.source;
     }
+    const prices =
+      data && shopifyListingFits(product.name, data)
+        ? pricesFromShopify(data, product.name, { unit: "cents", prior: product.price })
+        : null;
+    if (prices) priceQuotes.push({ ...prices, linked: true });
   }
 
   const pid = sephoraProductId(url);
@@ -525,28 +458,45 @@ export async function quoteCatalogProduct(
         caches.sephoraProductJsonFails = 0;
       }
     }
-    const stock = stockFromSephoraProduct(detailed) ?? stockFromSephoraProduct(prod) ?? null;
+    const sephStock = stockFromSephoraProduct(detailed) ?? stockFromSephoraProduct(prod) ?? null;
+    if (sephStock?.explicit && !stock) {
+      stock = { ...sephStock, source: `sephora-api:${pid ?? "search"}` };
+      source = stock.source;
+    }
     const priceSrc = detailed ?? prod;
     const prices = priceSrc ? pricesFromSephoraProduct(priceSrc, product.name, product.price) : null;
-    if (stock?.explicit) {
-      return { ...stock, source: `sephora-api:${pid ?? "search"}`, ...(prices ?? {}) };
-    }
+    if (prices) priceQuotes.push({ ...prices, linked: true });
   }
 
   const origin = brandShop(product.brand);
   if (origin) {
     const shopProducts = await loadShopifyShopProducts(origin, caches.shopifyShops);
-    const matches = matchShopifyProducts(product.name, product.brand, shopProducts);
-    const flags = matches
-      .map((row) => stockFromShopify(row, product.name))
-      .filter((row): row is StockRead => Boolean(row?.explicit));
-    if (flags.length) {
-      const avail = flags.some((row) => row.availability !== "out_of_stock") ? "in_stock" : "out_of_stock";
-      return { availability: avail, restockEstimate: null, source: `shopify-products:${origin}`, explicit: true };
+    const handle = SHOPIFY_HANDLE_RE.exec(url)?.[1] ?? "";
+    const matches = matchShopifyProducts(product.name, product.brand, shopProducts, handle);
+    const best = matches[0];
+    if (best && shopifyListingFits(product.name, best)) {
+      const flag = stockFromShopify(best, product.name);
+      if (flag?.explicit && !stock) {
+        stock = { ...flag, source: `shopify-products:${origin}` };
+        source = stock.source;
+      }
+      const prices = pricesFromShopify(best, product.name, { unit: "dollars", prior: product.price });
+      const sameProduct = handle && String(best.handle ?? "").toLowerCase() === handle.toLowerCase();
+      if (prices && priceIsPlausible(prices.price, product.price)) {
+        priceQuotes.push({ ...prices, linked: Boolean(sameProduct) });
+      }
     }
   }
 
-  return null;
+  const chosen = chooseVerifiedPrice(priceQuotes);
+  if (!stock?.explicit && !chosen) return null;
+  return {
+    availability: stock?.availability ?? product.availability,
+    restockEstimate: stock?.explicit ? stock.restockEstimate : null,
+    source: source || "catalog-json",
+    explicit: Boolean(stock?.explicit),
+    ...(chosen ?? {}),
+  };
 }
 
 export async function mapPool<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {

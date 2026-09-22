@@ -450,7 +450,8 @@ img {
   background: rgb(var(--bg-rgb) / 0.35);
 }
 .tag:hover,
-.tag:focus-visible {
+.tag:focus-visible,
+.tag[aria-current="page"] {
   color: var(--gold-text-bright);
   border-color: var(--gold);
 }

@@ -7,7 +7,11 @@ Sources, same family as the URL resolver:
   - Curated known list prices in scripts/data/known-list-prices.json
 
 Writes scripts/data/honest-prices.json. Then:
-  node scripts/generate-honest-prices.mjs  →  migrations/0009_honest_prices.sql
+  node scripts/generate-confirm-prices.mjs  →  migrations/0012_confirm_prices.sql
+
+salePrice counts only when it is below every list price. valuePrice is the
+compare-at for a single list price. Brand products.json compare_at (dollars)
+can raise an understated percent. No invented markdowns.
 """
 
 from __future__ import annotations
@@ -58,9 +62,19 @@ def money(raw) -> list[float]:
 
 
 def shopify_cents(raw) -> float | None:
-    """Shopify `/products/{handle}.js` stores money as integer cents."""
-    if raw in (None, "", 0, "0"):
+    """Shopify `/products/{handle}.js` stores money as integer cents. Decimal strings are dollars."""
+    return shopify_amount(raw, "cents")
+
+
+def shopify_dollars(raw) -> float | None:
+    """Shopify `/products.json` stores money as dollar strings ("34.00")."""
+    return shopify_amount(raw, "dollars")
+
+
+def shopify_amount(raw, unit: str) -> float | None:
+    if raw in (None, "", 0, "0", "0.00"):
         return None
+    text = str(raw).strip()
     try:
         val = float(raw)
     except (TypeError, ValueError):
@@ -68,7 +82,11 @@ def shopify_cents(raw) -> float | None:
         return parsed[0] if parsed else None
     if val <= 0:
         return None
-    return round(val / 100.0, 2)
+    as_dollars = unit == "dollars" or (isinstance(raw, str) and "." in text)
+    value = val if as_dollars else val / 100.0
+    if value <= 0 or value >= 20_000:
+        return None
+    return round_money(value)
 
 
 def round_money(n: float) -> float:
@@ -117,83 +135,236 @@ def is_mini_name(catalog_name: str) -> bool:
     return any(tok in name_l for tok in ("mini", "travel size", "travel-size"))
 
 
+def uniq_money(values: list[float]) -> list[float]:
+    return sorted({round_money(v) for v in values if v and 0 < v < 20_000})
+
+
 def pick_from_range(values: list[float], catalog_name: str, prior: float | None) -> float:
-    """Choose a size that matches the catalog SKU — never pair a mini with a jumbo."""
-    uniq = sorted({round_money(v) for v in values})
+    """Match the catalog size. Keep a mid-range price that sits inside the source range."""
+    uniq = uniq_money(values)
+    if not uniq:
+        raise ValueError("empty price range")
     lo, hi = uniq[0], uniq[-1]
     if is_mini_name(catalog_name):
         return lo
-    if prior is None:
+    if prior is None or prior <= 0:
         return hi
     if prior < lo - 0.51:
-        return lo  # catalog was below every real size — use lowest found
+        return lo
     if prior > hi + 0.51:
         return hi
-    # Prior sits on the PDP range: snap to a listed endpoint when it is clearly
-    # the same size, otherwise keep the mid-size (e.g. 50ml between travel and 100ml).
     nearest = min(uniq, key=lambda v: abs(v - prior))
     if abs(nearest - prior) <= max(3.0, nearest * 0.12):
         return nearest
     return round_money(prior)
 
 
-def prices_from_sephora_product(catalog_name: str, product: dict, prior: float | None = None) -> dict | None:
-    cs = product.get("currentSku") or {}
-    list_vals = money(cs.get("listPrice"))
-    sale_vals = money(cs.get("salePrice"))
-    on_sale = str(product.get("onSaleData") or "NONE").upper() not in {"NONE", "", "NULL"}
-    if not list_vals and not sale_vals:
-        return None
-
-    real_sale = bool(sale_vals) and (on_sale or (list_vals and min(sale_vals) + 0.009 < max(list_vals)))
-    if real_sale:
-        lists = sorted(list_vals) if list_vals else sorted(sale_vals)
-        sales = sorted(sale_vals)
-        if len(lists) == len(sales) and len(lists) >= 1:
-            listed = pick_from_range(lists, catalog_name, prior)
-            # pair the same size index
-            idx = min(range(len(lists)), key=lambda i: abs(lists[i] - listed))
-            listed = lists[idx]
-            current = sales[idx]
-        else:
-            listed = pick_from_range(lists, catalog_name, prior)
-            # proportional sale when only endpoints are published
-            if len(lists) >= 2 and len(sales) >= 2 and (max(lists) - min(lists)) > 0:
-                t = (listed - min(lists)) / (max(lists) - min(lists))
-                current = min(sales) + t * (max(sales) - min(sales))
-            else:
-                current = min(sales)
-        if current > listed:
-            current = listed
-        return {
-            "price": round_money(current),
-            "listPrice": round_money(listed),
-            "onSale": listed > current + 0.009,
-            "listPriceRaw": cs.get("listPrice"),
-            "salePriceRaw": cs.get("salePrice"),
-            "onSaleData": product.get("onSaleData"),
-        }
-
-    if not list_vals:
-        current = pick_from_range(sale_vals, catalog_name, prior)
-        return {
-            "price": round_money(current),
-            "listPrice": round_money(current),
-            "onSale": False,
-            "listPriceRaw": cs.get("listPrice"),
-            "salePriceRaw": cs.get("salePrice"),
-            "onSaleData": product.get("onSaleData"),
-        }
-
-    current = pick_from_range(list_vals, catalog_name, prior)
+def _sephora_payload(current: float, listed: float, cs: dict, product: dict) -> dict:
+    if current > listed:
+        current = listed
+    price = round_money(current)
+    list_price = round_money(listed if listed >= price else price)
     return {
-        "price": round_money(current),
-        "listPrice": round_money(current),
-        "onSale": False,
+        "price": price,
+        "listPrice": list_price,
+        "onSale": list_price > price + 0.009,
         "listPriceRaw": cs.get("listPrice"),
         "salePriceRaw": cs.get("salePrice"),
+        "valuePriceRaw": cs.get("valuePrice"),
         "onSaleData": product.get("onSaleData"),
     }
+
+
+def prices_from_sephora_product(catalog_name: str, product: dict, prior: float | None = None) -> dict | None:
+    cs = product.get("currentSku") or {}
+    lists = uniq_money(money(cs.get("listPrice")))
+    sales = uniq_money(money(cs.get("salePrice")))
+    values = uniq_money(money(cs.get("valuePrice")))
+    if not lists and not sales:
+        return None
+
+    real_sale = bool(sales) and bool(lists) and min(sales) + 0.009 < min(lists)
+    if real_sale:
+        if len(lists) == len(sales) and len(lists) > 1:
+            anchor = pick_from_range(lists, catalog_name, prior)
+            idx = min(range(len(lists)), key=lambda i: abs(lists[i] - anchor))
+            current = sales[idx]
+            listed = lists[idx]
+        else:
+            current = min(sales)
+            listed = min(lists)
+        parsed = _sephora_payload(current, listed, cs, product)
+    else:
+        base = lists or sales
+        current = pick_from_range(base, catalog_name, prior)
+        parsed = _sephora_payload(current, current, cs, product)
+
+    if parsed["listPrice"] <= parsed["price"] + 0.009 and values and len(lists) <= 1:
+        higher = [v for v in values if v > parsed["price"] + 0.009]
+        if len(higher) == 1 or (higher and max(higher) - min(higher) < 0.02):
+            parsed = _sephora_payload(parsed["price"], higher[0], cs, product)
+    return parsed
+
+
+SET_RE = re.compile(
+    r"\b(gift|set|duo|trio|kit|coffret|sampler|discovery|vault|bundle|ritual|collection|sample|refill|jumbo|exclusif|exclusive|candles?)\b",
+    re.I,
+)
+MINI_RE = re.compile(r"\b(mini|miniature|travel)\b", re.I)
+
+
+def title_fits(catalog_name: str, title: str) -> bool:
+    name = (catalog_name or "").lower()
+    label = title or ""
+    if SET_RE.search(label) and not SET_RE.search(name):
+        return False
+    if MINI_RE.search(label) and not is_mini_name(name) and "travel" not in name:
+        return False
+    if " + " in label and " + " not in name:
+        return False
+    return True
+
+
+NAME_STOP = {
+    "the", "a", "an", "and", "or", "of", "for", "with", "in", "on", "to", "de",
+    "eau", "parfum", "toilette", "cologne",
+}
+NAME_GENERIC = {
+    "lipstick", "lip", "colour", "color", "serum", "cream", "primer", "palette",
+    "spray", "powder", "gloss", "balm", "mascara", "foundation", "concealer",
+    "makeup", "beauty", "shade", "shades", "liquid",
+}
+FORM_WORDS = {
+    "powder", "mist", "oil", "cream", "serum", "primer", "palette", "lipstick", "mascara",
+    "concealer", "foundation", "spray", "shampoo", "conditioner", "gloss", "balm", "blush",
+    "liner", "lotion", "wash", "gel", "soap", "scrub", "mask", "toner", "essence",
+    "sunscreen", "bronzer", "highlighter", "perfume", "parfum", "toilette", "cologne",
+}
+QUALIFIER_RE = re.compile(r"\b(starter|beginners?)\b", re.I)
+SIZE_WORDS = {
+    "ml", "oz", "fl", "pack", "single", "full", "regular", "default", "title",
+    "size", "portable", "pcs", "pc",
+}
+SIZE_TOKEN = re.compile(r"^\d+(?:\.\d+)?(?:ml|oz|g|fl|l|pack)?$")
+
+
+def name_words(text: str) -> set[str]:
+    text = (text or "").lower().replace("®", " ").replace("™", " ").replace("’", "'").replace("‘", "'")
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return {t for t in text.split() if t not in NAME_STOP and len(t) > 1}
+
+
+def title_match_rank(catalog_name: str, title: str, variant_titles: list[str] | None = None) -> tuple[float, int] | None:
+    """Coverage and extra-token count, or None when the title is a different product.
+
+    Keep in sync with catalogTitleRank in src/lib/catalog-price.ts.
+    """
+    if not title_fits(catalog_name, title):
+        return None
+    if QUALIFIER_RE.search(title or "") and not QUALIFIER_RE.search(catalog_name or ""):
+        return None
+    ours = name_words(catalog_name)
+    if not ours:
+        return None
+    title_toks = name_words(title)
+    catalog_forms = ours & FORM_WORDS
+    title_forms = title_toks & FORM_WORDS
+    if title_forms - catalog_forms:
+        return None
+    form_synonym = {"lipstick": {"lip"}}
+    for word in catalog_forms - title_forms:
+        if not form_synonym.get(word, set()) & title_toks:
+            return None
+    hay = set(title_toks)
+    for variant in variant_titles or []:
+        hay |= name_words(variant)
+    distinctive = {t for t in ours if t not in NAME_GENERIC} or ours
+    if not distinctive <= hay:
+        return None
+    coverage = len(ours & hay) / len(ours)
+    if coverage + 1e-9 < (2 / 3):
+        return None
+    extra = 0
+    for token in title_toks:
+        if token in ours or token in NAME_GENERIC or token in SIZE_WORDS or SIZE_TOKEN.match(token):
+            continue
+        extra += 1
+    if extra > 1:
+        return None
+    return coverage, extra
+
+
+def listing_fits(catalog_name: str, item: dict) -> bool:
+    title = str(item.get("title") or "")
+    if title and not title_fits(catalog_name, title):
+        return False
+    tags = item.get("tags") or []
+    tag_text = " ".join(str(t) for t in tags) if isinstance(tags, list) else str(tags)
+    meta = f"{item.get('type') or item.get('product_type') or ''} {tag_text}"
+    if re.search(r"\bsample\b", meta, re.I) and not re.search(r"\bsample\b", catalog_name or "", re.I):
+        return False
+    return True
+
+
+def url_handle(url: str) -> str:
+    m = SHOPIFY_HANDLE_RE.search(strip_query(url or ""))
+    return m.group(1).lower() if m else ""
+
+
+def prices_from_shopify_variants(variants: list, catalog_name: str, prior: float | None, unit: str) -> dict | None:
+    rows: list[dict] = []
+    for var in variants:
+        price = shopify_amount(var.get("price"), unit)
+        if price is None:
+            continue
+        compare = shopify_amount(var.get("compare_at_price"), unit)
+        listed = compare if compare and compare > price + 0.009 else price
+        rows.append({"price": price, "listPrice": listed, "title": str(var.get("title") or var.get("option1") or "")})
+    if not rows:
+        return None
+    fitting = [row for row in rows if title_fits(catalog_name, row["title"])]
+    unnamed = [row for row in rows if not row["title"].strip() or row["title"].strip().lower() == "default title"]
+    if not fitting and not unnamed:
+        return None
+    pool = fitting or unnamed
+    if prior and prior > 0:
+        plausible = [row for row in pool if price_is_plausible(row["price"], prior)]
+        if not plausible:
+            return None
+        pool = plausible
+        chosen = min(pool, key=lambda row: (abs(row["price"] - prior), row["price"]))
+    else:
+        chosen = min(pool, key=lambda row: row["price"])
+    price = round_money(chosen["price"])
+    listed = round_money(chosen["listPrice"] if chosen["listPrice"] >= price else price)
+    return {
+        "price": price,
+        "listPrice": listed,
+        "onSale": listed > price + 0.009,
+        "variants": len(rows),
+    }
+
+
+def choose_verified_price(quotes: list[dict]) -> dict | None:
+    """Deepest real compare-at wins. Otherwise keep the linked price, or the lowest verified price."""
+    usable = []
+    for quote in quotes:
+        price = quote.get("price")
+        listed = quote.get("listPrice")
+        if not price or price <= 0 or not listed or listed <= 0:
+            continue
+        if listed + 0.001 < price - 0.001:
+            continue
+        usable.append(quote)
+    if not usable:
+        return None
+    real = [quote for quote in usable if quote["listPrice"] > quote["price"] + 0.009]
+    if real:
+        return max(real, key=lambda quote: (discount_percent(quote["price"], quote["listPrice"]), -quote["price"]))
+    linked = [quote for quote in usable if quote.get("linked")]
+    pool = linked or usable
+    best = min(pool, key=lambda quote: quote["price"])
+    return {**best, "price": round_money(best["price"]), "listPrice": round_money(best["price"]), "onSale": False}
 
 
 def find_sephora_by_id(products: list[dict], product_id: str) -> dict | None:
@@ -217,44 +388,11 @@ def shopify_js_url(product_url: str) -> str | None:
     return f"{parsed.scheme}://{parsed.netloc}/products/{handle}.js"
 
 
-def prices_from_shopify_js(data: dict, catalog_name: str) -> dict | None:
+def prices_from_shopify_js(data: dict, catalog_name: str, prior: float | None = None) -> dict | None:
     variants = data.get("variants") or []
     if not variants:
-        price = shopify_cents(data.get("price"))
-        compare = shopify_cents(data.get("compare_at_price"))
-        if price is None:
-            return None
-        listed = compare if compare and compare > price else price
-        return {"price": price, "listPrice": listed, "onSale": listed > price + 0.009, "variants": 0}
-
-    rows: list[tuple[float, float]] = []
-    for var in variants:
-        price = shopify_cents(var.get("price"))
-        if price is None:
-            continue
-        compare = shopify_cents(var.get("compare_at_price"))
-        listed = compare if compare and compare > price else price
-        rows.append((price, listed))
-    if not rows:
-        return None
-
-    name_l = (catalog_name or "").lower()
-    mini = any(tok in name_l for tok in ("mini", "travel size", "travel-size"))
-    # Lowest found current selling price; for full-size names prefer the
-    # highest in-stock variant so we do not advertise a mini as the hero SKU.
-    if mini:
-        price, listed = min(rows, key=lambda r: r[0])
-    else:
-        # Prefer the most common full-size: highest current price that is not a jumbo outlier
-        prices = sorted({r[0] for r in rows})
-        price = prices[-1]
-        listed = max(r[1] for r in rows if r[0] == price)
-    return {
-        "price": round_money(price),
-        "listPrice": round_money(listed if listed >= price else price),
-        "onSale": listed > price + 0.009,
-        "variants": len(rows),
-    }
+        variants = [data]
+    return prices_from_shopify_variants(variants, catalog_name, prior, "cents")
 
 
 def finalize(row: dict, prior: float | None) -> dict:
@@ -277,7 +415,294 @@ def finalize(row: dict, prior: float | None) -> dict:
     }
 
 
+def price_is_plausible(next_price: float, prior: float | None) -> bool:
+    if not next_price or next_price <= 0:
+        return False
+    if not prior or prior <= 0:
+        return True
+    return prior * 0.45 <= next_price <= prior * 1.5
+
+
+def apply_brand_products(products: list[dict], resolved: dict, urls: dict, prior_for, args: list[str]) -> None:
+    """Match brand products.json and raise a discount when compare_at is real."""
+    img_spec = importlib.util.spec_from_file_location(
+        "img_resolver", ROOT / "scripts" / "resolve-real-product-images.py"
+    )
+    img_mod = importlib.util.module_from_spec(img_spec)
+    assert img_spec and img_spec.loader
+    img_spec.loader.exec_module(img_mod)
+
+    cache_path = ROOT / "scripts" / "data" / "price-shopify.cache.json"
+    catalog: list[dict] = []
+    if cache_path.exists() and "--refresh-shops" not in args:
+        try:
+            loaded = json.loads(cache_path.read_text())
+            if isinstance(loaded, list) and loaded:
+                catalog = loaded
+                print(f"shopify products.json cache items={len(catalog)}", flush=True)
+        except Exception:
+            catalog = []
+    if not catalog:
+        print("loading brand products.json", flush=True)
+        try:
+            catalog = img_mod.load_shopify_catalogs()
+        except Exception as exc:
+            print(f"shopify catalog failed: {exc}", flush=True)
+            catalog = []
+        if catalog:
+            cache_path.write_text(json.dumps(catalog))
+            print(f"shopify products.json items={len(catalog)}", flush=True)
+    if not catalog:
+        return
+
+    by_brand: dict[str, list[dict]] = {}
+
+    def candidates(brand: str) -> list[dict]:
+        key = brand or ""
+        if key not in by_brand:
+            by_brand[key] = [item for item in catalog if img_mod.brand_ok(brand, item)]
+        return by_brand[key]
+
+    raised = 0
+    for item in products:
+        pid = item["id"]
+        prior = prior_for(pid)
+        options: list[tuple] = []
+        meta = urls.get(pid) or {}
+        product_url = meta.get("productUrl") or ""
+        for shop_item in candidates(item["brand"]):
+            if not listing_fits(item["name"], shop_item):
+                continue
+            title = shop_item.get("title") or ""
+            variants = shop_item.get("variants") or []
+            variant_titles = [str(var.get("title") or "") for var in variants]
+            rank = title_match_rank(item["name"], title, variant_titles)
+            if not rank:
+                continue
+            coverage, extra = rank
+            parsed = prices_from_shopify_variants(variants, item["name"], prior, "dollars")
+            if not parsed or parsed["price"] <= 0:
+                continue
+            if not price_is_plausible(parsed["price"], prior):
+                continue
+            shop = shop_item.get("shop") or ""
+            handle = str(shop_item.get("handle") or "")
+            handle_match = bool(handle) and url_handle(product_url) == handle.lower()
+            options.append(
+                (
+                    0 if handle_match else 1,
+                    extra,
+                    -coverage,
+                    abs(parsed["price"] - prior) if prior else 0.0,
+                    parsed["price"],
+                    {
+                        "id": pid,
+                        "name": item["name"],
+                        "brand": item["brand"],
+                        **parsed,
+                        "source": f"shopify-products:{shop}",
+                        "kind": "brand-products",
+                        "matchName": title,
+                        "score": round(coverage, 3),
+                        "linked": handle_match,
+                    },
+                )
+            )
+        if not options:
+            continue
+        options.sort(key=lambda row: row[:5])
+        brand_row = options[0][5]
+        existing = resolved.get(pid)
+        quotes = []
+        if existing and existing.get("kind") != "cleared":
+            quotes.append({**existing, "linked": True})
+        quotes.append(brand_row)
+        winner = choose_verified_price(quotes)
+        if not winner:
+            continue
+        row = finalize(winner, prior)
+        prev = existing or {}
+        if row["discountPercent"] > (prev.get("discountPercent") or 0) or (
+            existing and existing.get("kind") == "cleared" and row["kind"] != "cleared"
+        ):
+            raised += 1
+        resolved[pid] = row
+    print(f"brand products.json quotes applied, discount-or-verify touches={raised}", flush=True)
+
+
+def recompute_stats(resolved: dict, previous_doc: dict) -> dict:
+    stats = {
+        "total": len(resolved),
+        "verified": 0,
+        "verifiedSephora": 0,
+        "verifiedShopify": 0,
+        "knownList": 0,
+        "clearedOnly": 0,
+        "realMarkdowns": 0,
+        "clearedDiscounts": 0,
+        "flipped": 0,
+        "fakeRemoved": 0,
+        "understatedRaised": 0,
+    }
+    for pid, row in resolved.items():
+        kind = row.get("kind") or ""
+        prev = previous_doc.get(pid) or {}
+        prev_price = prev.get("price")
+        prev_list = prev.get("listPrice") if prev.get("listPrice") is not None else prev_price
+        prev_disc = prev.get("discountPercent")
+        if prev_disc is None and prev_price and prev_list:
+            prev_disc = discount_percent(float(prev_price), float(prev_list))
+        prev_disc = int(prev_disc or 0)
+        new_disc = int(row.get("discountPercent") or 0)
+        changed = prev_price is None or abs(float(row["price"]) - float(prev_price)) >= 0.01 or abs(
+            float(row["listPrice"]) - float(prev_list or 0)
+        ) >= 0.01
+        row["changed"] = bool(changed)
+        row["previousPrice"] = prev_price
+        row["previousListPrice"] = prev_list
+        row["previousDiscountPercent"] = prev_disc
+        if kind == "cleared":
+            stats["clearedOnly"] += 1
+        elif kind == "known-list":
+            stats["knownList"] += 1
+            stats["verified"] += 1
+        elif kind.startswith("sephora"):
+            stats["verifiedSephora"] += 1
+            stats["verified"] += 1
+        elif kind in {"brand-pdp", "brand-products"}:
+            stats["verifiedShopify"] += 1
+            stats["verified"] += 1
+        else:
+            stats["verified"] += 1
+        if new_disc > 0:
+            stats["realMarkdowns"] += 1
+        else:
+            stats["clearedDiscounts"] += 1
+        if changed and prev_price is not None:
+            stats["flipped"] += 1
+        if prev_disc > 0 and new_disc == 0:
+            stats["fakeRemoved"] += 1
+        if new_disc > prev_disc:
+            stats["understatedRaised"] += 1
+    return stats
+
+
+def _self_check() -> None:
+    value = prices_from_sephora_product(
+        "Violet Faves",
+        {"currentSku": {"listPrice": "$34.00", "valuePrice": "$48.00"}, "onSaleData": "NONE"},
+        34,
+    )
+    assert value and value["price"] == 34 and value["listPrice"] == 48, value
+    sale = prices_from_sephora_product(
+        "Extra Fussy",
+        {"currentSku": {"listPrice": "$26.00", "salePrice": "$18.20", "valuePrice": "$45.00"}, "onSaleData": "FULL"},
+        26,
+    )
+    assert sale and sale["price"] == 18.2 and sale["listPrice"] == 26, sale
+    rang = prices_from_sephora_product(
+        "Pillow Talk",
+        {"currentSku": {"listPrice": "$37.00 - $39.00", "salePrice": "$37.00"}, "onSaleData": "NONE"},
+        37,
+    )
+    assert rang and rang["price"] == 37 and rang["listPrice"] == 37, rang
+    kept_size = prices_from_sephora_product(
+        "Bal d'Afrique Eau de Parfum",
+        {"currentSku": {"listPrice": "$90.00 - $330.00"}, "onSaleData": "NONE"},
+        196,
+    )
+    assert kept_size and kept_size["price"] == 196 and kept_size["listPrice"] == 196, kept_size
+    blush = prices_from_sephora_product(
+        "Colorful Blush",
+        {"currentSku": {"listPrice": "$14.00 - $15.00", "salePrice": "$7.00"}, "onSaleData": "FULL"},
+        14,
+    )
+    assert blush and blush["price"] == 7 and blush["listPrice"] == 14, blush
+    cents = prices_from_shopify_variants(
+        [{"title": "Default Title", "price": 3400, "compare_at_price": 4800}],
+        "Trio",
+        48,
+        "cents",
+    )
+    assert cents and cents["price"] == 34 and cents["listPrice"] == 48, cents
+    dollars = prices_from_shopify_variants(
+        [{"title": "Default Title", "price": "34.00", "compare_at_price": "48.00"}],
+        "Trio",
+        48,
+        "dollars",
+    )
+    assert dollars and dollars["price"] == 34 and dollars["listPrice"] == 48, dollars
+    bottle = prices_from_shopify_variants(
+        [
+            {"title": "100ml", "price": "140.00", "compare_at_price": None},
+            {"title": "10ml Miniature", "price": "88.00", "compare_at_price": None},
+        ],
+        "Vanilla | 28",
+        130,
+        "dollars",
+    )
+    assert bottle and bottle["price"] == 140 and bottle["listPrice"] == 140, bottle
+    skipped = prices_from_shopify_variants(
+        [
+            {"title": "100ml", "price": "559.00", "compare_at_price": None},
+            {"title": "10ml Miniature", "price": "125.00", "compare_at_price": None},
+        ],
+        "Vanilla | 28",
+        88,
+        "dollars",
+    )
+    assert skipped is None, skipped
+    kept = choose_verified_price(
+        [
+            {"price": 40, "listPrice": 40, "linked": True, "kind": "sephora-pdp"},
+            {"price": 18, "listPrice": 18, "linked": False, "kind": "brand-products"},
+        ]
+    )
+    assert kept and kept["price"] == 40 and kept["listPrice"] == 40, kept
+    raised = choose_verified_price(
+        [
+            {"price": 25, "listPrice": 25, "linked": True, "kind": "sephora-pdp"},
+            {"price": 20, "listPrice": 28, "linked": False, "kind": "brand-products"},
+        ]
+    )
+    assert raised and raised["price"] == 20 and raised["listPrice"] == 28, raised
+    mist = title_match_rank(
+        "Stay All Night Micro-Fine Setting Mist",
+        "Stay All Night Micro-Fine Setting Mist",
+    )
+    lipstick = title_match_rank(
+        "Stay All Night Micro-Fine Setting Mist",
+        "O FACE Satin Lipstick - All Night",
+    )
+    assert mist and mist[1] == 0, mist
+    assert lipstick is None, lipstick
+    assert title_match_rank("Molecule 01", "Escentric 01") is None
+    assert title_match_rank("Molecule 01", "Molecule 01") is not None
+    assert title_match_rank("Molecule 01", "Molecule 01 + Clary Sage") is None
+    revive = title_match_rank(
+        "Revive Serum Ginseng + Snail",
+        "Revive Serum : Ginseng + Snail Mucin",
+    )
+    assert revive and revive[1] == 1, revive
+    assert title_match_rank("Revive Serum Ginseng + Snail", "Relief Sun") is None
+    assert title_match_rank("Delina Eau de Parfum", "DELINA") is not None
+    assert title_match_rank("Delina Eau de Parfum", "DELINA EXCLUSIF") is None
+    assert title_match_rank("Delina Eau de Parfum", "DELINA LA ROSEE") is None
+    assert title_match_rank("Slant Tweezer", "Navy Blue Slant Tweezer") is None
+    assert title_match_rank("Vanilla Sky Body Mist", "Vanilla Sky Hair & Body Mist") is not None
+    assert title_match_rank("Naxos Eau de Parfum", "Naxos Sample") is None
+    assert title_match_rank("Pro Filt'r Soft Matte Foundation 370", "Pro Filt'r Soft Matte Powder Foundation") is None
+    assert title_match_rank("Not Another Cherry Eau de Parfum", "Not Another Cherry - Candles") is None
+    assert title_match_rank("Retinol Serum", "Starter Retinol Serum") is None
+    assert title_match_rank("Vanilla | 28 Travel Spray", "Vanilla | 28") is None
+    assert title_match_rank("The Vitamin C 23 Serum", "Advanced The Vitamin C 23 Serum") is not None
+    assert title_match_rank("Velvet Ribbon Lipstick", "Velvet Ribbon (True Velvet Lip Colour)") is not None
+    assert not listing_fits("Molecule 01", {"title": "Molecule 01", "type": "10ml Sample", "tags": ["Sample"]})
+    print("price self-check ok", flush=True)
+
+
 def main() -> None:
+    _self_check()
     limit = None
     sleep_s = 0.12
     args = sys.argv[1:]
@@ -292,6 +717,19 @@ def main() -> None:
     print(f"catalog products={len(products)}", flush=True)
 
     prior_prices = extract_seed_prices()
+    previous_doc: dict = {}
+    if OUT_JSON.exists():
+        try:
+            previous_doc = json.loads(OUT_JSON.read_text()).get("products") or {}
+        except Exception:
+            previous_doc = {}
+
+    def prior_for(pid: str) -> float | None:
+        prev = previous_doc.get(pid) or {}
+        if prev.get("price"):
+            return float(prev["price"])
+        return prior_prices.get(pid)
+
     urls = {}
     if URLS_JSON.exists():
         urls = (json.loads(URLS_JSON.read_text()).get("products") or {})
@@ -353,7 +791,7 @@ def main() -> None:
     for product_id, group in by_pid.items():
         prod = sephora_hits.get(product_id)
         for item in group:
-            prior = prior_prices.get(item["id"])
+            prior = prior_for(item["id"])
             if prod:
                 parsed = prices_from_sephora_product(item["name"], prod, prior)
                 if parsed:
@@ -379,7 +817,7 @@ def main() -> None:
     for i, item in enumerate(others):
         if item["id"] in resolved:
             continue
-        prior = prior_prices.get(item["id"])
+        prior = prior_for(item["id"])
         meta = item.get("meta") or {}
         print(f"[other {i+1}/{len(others)}] {item['id']}", flush=True)
 
@@ -398,26 +836,27 @@ def main() -> None:
                     print(f"    shopify fail {js_url}: {exc}", flush=True)
                     shopify_data = None
                 time.sleep(sleep_s)
-            if shopify_data:
-                parsed = prices_from_shopify_js(shopify_data, item["name"])
-                if parsed:
-                    row = finalize(
-                        {
-                            "id": item["id"],
-                            "name": item["name"],
-                            "brand": item["brand"],
-                            **parsed,
-                            "source": f"shopify-js:{js_url}",
-                            "kind": "brand-pdp",
-                            "matchName": shopify_data.get("title"),
-                        },
-                        prior,
-                    )
-                    if row["discountPercent"] > 0:
-                        stats["realMarkdowns"] += 1
-                    stats["verifiedShopify"] += 1
-                    resolved[item["id"]] = row
-                    continue
+            parsed = None
+            if shopify_data and listing_fits(item["name"], shopify_data):
+                parsed = prices_from_shopify_js(shopify_data, item["name"], prior)
+            if parsed:
+                row = finalize(
+                    {
+                        "id": item["id"],
+                        "name": item["name"],
+                        "brand": item["brand"],
+                        **parsed,
+                        "source": f"shopify-js:{js_url}",
+                        "kind": "brand-pdp",
+                        "matchName": shopify_data.get("title"),
+                    },
+                    prior,
+                )
+                if row["discountPercent"] > 0:
+                    stats["realMarkdowns"] += 1
+                stats["verifiedShopify"] += 1
+                resolved[item["id"]] = row
+                continue
 
         # 2) Sephora search even for brand / fallback SKUs
         hits = sephora_search(item["brand"], item["name"], sephora_cache)
@@ -495,8 +934,8 @@ def main() -> None:
 
     CACHE.write_text(json.dumps({"sephoraSearch": sephora_cache, "shopifyJs": shopify_cache}, indent=2))
 
-    stats["verified"] = stats["verifiedSephora"] + stats["verifiedShopify"] + stats["knownList"]
-    stats["clearedDiscounts"] = sum(1 for r in resolved.values() if r["discountPercent"] == 0)
+    apply_brand_products(products, resolved, urls, prior_for, args)
+    stats = recompute_stats(resolved, previous_doc)
 
     payload = {
         "generated": True,

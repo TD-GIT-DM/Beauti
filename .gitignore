@@ -23,6 +23,7 @@ scripts/data/real-product-urls.cache.json
 scripts/data/honest-prices.cache.json
 scripts/data/availability.cache.json
 scripts/data/availability.shopify.cache.json
+scripts/data/price-shopify.cache.json
 # Capacitor / Xcode (keep the project; ignore build products and copied web assets)
 ios/App/Pods
 ios/App/build

@@ -55,3 +55,14 @@ export function parseOptionalNumber(value: string | undefined | null): number | 
   const n = Number(value);
   return Number.isFinite(n) ? n : undefined;
 }
+
+/**
+ * Tag chips show global catalog counts. Selecting one replaces the free-text
+ * query and price filters so the result set is that tag, not an accidental AND.
+ */
+export function tagSelectionQuery(name: string): string {
+  const next = new URLSearchParams();
+  const trimmed = name.trim();
+  if (trimmed) next.set("tag", trimmed);
+  return next.toString();
+}

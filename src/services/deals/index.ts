@@ -243,7 +243,8 @@ async function scanCatalog(env: Bindings, catalog: CatalogProduct[], nowIso: str
   let unverified = 0;
   for (let i = 0; i < batch.length; i++) {
     const quote = quotes[i];
-    if (!quote?.explicit) {
+    const priceVerified = quote?.price != null && quote.price > 0 && quote.listPrice != null && quote.listPrice > 0;
+    if (!quote || (!quote.explicit && !priceVerified)) {
       unverified += 1;
       continue;
     }
@@ -300,9 +301,11 @@ async function scanDemo(
 /**
  * Periodic deal scan.
  *
- * Cron (no `force`) refreshes availability + price from Sephora catalog JSON
- * and Shopify product JSON. Manual Notifications → Run deal scan still applies
- * a demo restock / drop and does not call retailer APIs.
+ * Cron (no `force`) refreshes availability + price from Sephora catalog JSON,
+ * Shopify product JSON, and brand products.json. Compare-at prices raise the
+ * stored discount. A quote with no compare-at stores the sell price and no
+ * percent off. Manual Notifications → Run deal scan still applies a demo
+ * restock / drop and does not call retailer APIs.
  */
 export async function scanDeals(env: Bindings, options: ScanOptions = {}): Promise<ScanSummary> {
   const now = options.now ?? new Date();
