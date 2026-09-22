@@ -87,13 +87,6 @@ export function HomePage() {
             <Link className="shop-link" to="/search">
               Search the catalog
             </Link>
-            <div className="tag-row explore-tags">
-              {["lipstick", "red", "blush", "foundation", "skincare", "fragrance"].map((tag) => (
-                <Link key={tag} className="tag" to={`/search?tag=${encodeURIComponent(tag)}`}>
-                  {tag}
-                </Link>
-              ))}
-            </div>
           </div>
         </section>
       </div>

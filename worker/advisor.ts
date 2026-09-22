@@ -5,12 +5,14 @@ import {
   advisorUserPrompt,
   catalogShortlist,
   clampAdvisorMessage,
+  clientAdvisorProducts,
   effectiveQuestion,
   expandAdvisorQuery,
   groundAdvisorPick,
   parseAdvisorJson,
+  type AdvisorCatalogProduct,
 } from "../src/lib/advisor";
-import type { AdvisorMessage, AdvisorProduct, AdvisorResponse } from "../src/types";
+import type { AdvisorMessage, AdvisorResponse } from "../src/types";
 import { mapProduct, withDiscount, type ProductRow } from "./db";
 
 const JSON_SCHEMA = {
@@ -25,7 +27,7 @@ const JSON_SCHEMA = {
   },
 } as const;
 
-export function toAdvisorProduct(row: ProductRow): AdvisorProduct {
+export function toAdvisorProduct(row: ProductRow): AdvisorCatalogProduct {
   const product = withDiscount(mapProduct(row));
   return {
     id: product.id,
@@ -76,7 +78,7 @@ export async function adviseFromCatalog(env: Env, question: string, messages: Ad
     const grounded = groundAdvisorPick(null, shortlist, query);
     return {
       reply: grounded.reply,
-      products: grounded.products,
+      products: clientAdvisorProducts(grounded.products),
       searchHint: grounded.searchHint,
       grounded: true,
       model: null,
@@ -87,7 +89,7 @@ export async function adviseFromCatalog(env: Env, question: string, messages: Ad
   const grounded = groundAdvisorPick(aiPick.pick, shortlist, query);
   return {
     reply: grounded.reply,
-    products: grounded.products,
+    products: clientAdvisorProducts(grounded.products),
     searchHint: grounded.searchHint,
     grounded: true,
     model: aiPick.model,
@@ -97,7 +99,7 @@ export async function adviseFromCatalog(env: Env, question: string, messages: Ad
 async function rankWithWorkersAi(
   env: Env,
   question: string,
-  shortlist: AdvisorProduct[],
+  shortlist: AdvisorCatalogProduct[],
   messages: AdvisorMessage[],
 ): Promise<{ pick: ReturnType<typeof parseAdvisorJson>; model: string | null }> {
   if (!env.AI) return { pick: null, model: null };

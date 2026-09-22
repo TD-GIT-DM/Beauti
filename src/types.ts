@@ -24,7 +24,6 @@ export interface Product {
   listPrice?: number | null;
   currency: string;
   productUrl: string;
-  tags: string[];
   promoCodes: PromoCode[];
   dealScore: number;
   /** Real list-vs-sale (or verified promo); 0 if the linked page is full price. */
@@ -48,16 +47,10 @@ export interface AppNotification {
   brand: string;
 }
 
-export interface TagCount {
-  name: string;
-  count: number;
-}
-
 export type ProductSort = "deal" | "price_asc" | "price_desc" | "discount_desc";
 
 export interface ProductQuery {
   q?: string;
-  tag?: string;
   deals?: boolean;
   minPrice?: number;
   maxPrice?: number;
@@ -89,7 +82,6 @@ export interface AdvisorProduct {
   imageUrl: string;
   price: number;
   currency: string;
-  tags: string[];
   availability: Availability;
   restockEstimate: string | null;
 }
@@ -101,7 +93,6 @@ export interface AdvisorMessage {
 
 export interface AdvisorSearchHint {
   q?: string;
-  tag?: string;
 }
 
 export interface AdvisorResponse {

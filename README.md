@@ -78,10 +78,10 @@ That hits the same 15-minute Cron Trigger path: a rotating batch of SKUs is quot
 ## Catalog UX
 
 - **Home** — up to **five real markdowns** (list vs sale on the linked retailer/brand page), one product per viewport (scroll-snap). If fewer than five SKUs are actually on sale, the slate fills with honest best-price picks and **no fake % off badge**. Discount is never invented from seed promo codes or mock price-history peaks.
-- **Search** — `/search` is a dedicated tab (header magnifying glass). Empty state: **filter control at the top**, search bar **centered** in the viewport. Results: `/search?q=` / `tag=` plus price and discount filters. Clicking a tag chip sets that tag and clears the free-text query (and price filters) so the result count matches the chip. Typing in the search box while a tag is active searches within that tag. Reset search and Clear filters drop the tag and the query.
-- Multi-word queries are **AND-tokenized** (`red lipstick` matches tags/name/description that contain both `red` and `lipstick`), then ranked so name and tag hits beat a mention in copy.
+- **Search** — `/search` is a dedicated tab (header magnifying glass). Empty state: **filter control at the top**, search bar **centered** in the viewport. Results use `/search?q=` plus price and discount filters. A `tag` query param is ignored and removed. There is no tag cloud or tag chip.
+- Multi-word queries are **AND-tokenized** (`red lipstick` matches name, brand, description, and private tags that contain both `red` and `lipstick`), then ranked so name and private-tag hits beat a mention in copy. Tags stay in D1 for that matching. They are not shown in the app or returned by the API.
 - Out-of-stock products stay visible; the description includes a **restock estimate** (date range or “unknown / may not return”)
-- **Ask Beauti** — floating catalog advisor. Natural questions are matched against D1 products (tags, name, brand, description, availability), then Workers AI writes a short reply from that shortlist only. Cards open `/product/:id`. Off-catalog asks are refused. This is product matching, not medical advice.
+- **Ask Beauti** — floating catalog advisor. Natural questions are matched against D1 products (name, brand, description, availability, and private tags), then Workers AI writes a short reply from that shortlist only. Replies and cards do not show tags. Cards open `/product/:id`. Off-catalog asks are refused. This is product matching, not medical advice.
 
 ## Wishlist & notifications
 
@@ -262,14 +262,13 @@ Generators prefer official pack shots from `scripts/lib/catalog-media.mjs` (and 
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/api/products?q=&tag=&minPrice=&maxPrice=&minDiscount=&sort=&limit=` | Catalog + tokenized search. `sort`: `deal` (default), `price_asc`, `price_desc`, `discount_desc` |
-| GET | `/api/products/:id` | Detail + price history |
-| GET | `/api/tags` | Tag cloud |
+| GET | `/api/products?q=&minPrice=&maxPrice=&minDiscount=&sort=&limit=` | Catalog + tokenized search. `q` also matches private tags. `sort`: `deal` (default), `price_asc`, `price_desc`, `discount_desc`. Product JSON omits `tags`. A `tag` query param is ignored. |
+| GET | `/api/products/:id` | Detail + price history. Product JSON omits `tags`. |
 | GET | `/api/deals` | Top 5 by computed discount % |
 | POST | `/api/deals/scan` | `{ "force": "cycle" \| "restock" \| "drop" }` |
 | GET/POST/DELETE | `/api/wishlist` | Device-scoped hearts |
 | GET | `/api/notifications` | Inbox |
-| POST | `/api/advisor` | `{ "message": "vanilla perfume", "messages"?: [{role, content}] }` catalog-only product matcher |
+| POST | `/api/advisor` | `{ "message": "vanilla perfume", "messages"?: [{role, content}] }` catalog-only product matcher. Product objects omit `tags`. |
 | POST | `/api/push/subscribe` | Web Push subscription |
 
 Send `X-Device-Id` on every call. The iOS shell also sends `X-Beauti-Session` after sign-in (WKWebView may ignore the session cookie). See [`docs/ios.md`](docs/ios.md).

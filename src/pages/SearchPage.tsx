@@ -1,33 +1,34 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { EmptyState } from "../components/EmptyState";
 import { ProductGrid } from "../components/ProductGrid";
 import { SearchFilters, type SearchFilterValues } from "../components/SearchFilters";
 import { useApp } from "../context/AppContext";
-import { parseOptionalNumber, tagSelectionQuery } from "../lib/search";
-import type { Product, ProductSort, TagCount } from "../types";
-
-const SUGGESTED_TAGS = ["lipstick", "red", "blush", "foundation", "mascara", "skincare", "fragrance", "hair", "nails", "tools"];
+import { parseOptionalNumber, withoutTagParam } from "../lib/search";
+import type { Product, ProductSort } from "../types";
 
 export function SearchPage() {
   const { wishlist, toggleWish } = useApp();
   const [params, setParams] = useSearchParams();
   const q = params.get("q") ?? "";
-  const tag = params.get("tag") ?? "";
   const minPrice = params.get("minPrice") ?? "";
   const maxPrice = params.get("maxPrice") ?? "";
   const minDiscount = params.get("minDiscount") ?? "";
   const sort = (params.get("sort") ?? "") as ProductSort | "";
   const [draftQ, setDraftQ] = useState(q);
   const [products, setProducts] = useState<Product[]>([]);
-  const [tags, setTags] = useState<TagCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const filterValues: SearchFilterValues = { minPrice, maxPrice, minDiscount, sort };
   const activeFilterCount = [minPrice, maxPrice, minDiscount, sort].filter(Boolean).length;
-  const isLanding = !q && !tag && activeFilterCount === 0;
+  const isLanding = !q && activeFilterCount === 0;
+
+  useEffect(() => {
+    if (!params.has("tag")) return;
+    setParams(withoutTagParam(params), { replace: true });
+  }, [params, setParams]);
 
   useEffect(() => {
     setDraftQ(q);
@@ -36,21 +37,17 @@ export function SearchPage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([
-      api.products({
+    api
+      .products({
         q,
-        tag,
         minPrice: parseOptionalNumber(minPrice),
         maxPrice: parseOptionalNumber(maxPrice),
         minDiscount: parseOptionalNumber(minDiscount),
         sort: sort || undefined,
-      }),
-      api.tags(),
-    ])
-      .then(([catalog, tagData]) => {
+      })
+      .then((catalog) => {
         if (cancelled) return;
         setProducts(catalog.products);
-        setTags(tagData.tags);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -58,18 +55,16 @@ export function SearchPage() {
     return () => {
       cancelled = true;
     };
-  }, [q, tag, minPrice, maxPrice, minDiscount, sort]);
+  }, [q, minPrice, maxPrice, minDiscount, sort]);
 
   const heading = useMemo(() => {
-    if (tag && q) return `${q} in #${tag}`;
-    if (tag) return `#${tag}`;
     if (q) return q;
     if (activeFilterCount) return "Filtered catalog";
     return "Search";
-  }, [q, tag, activeFilterCount]);
+  }, [q, activeFilterCount]);
 
   function runSearch(value: string) {
-    const next = new URLSearchParams(params);
+    const next = withoutTagParam(params);
     const trimmed = value.trim();
     if (trimmed) next.set("q", trimmed);
     else next.delete("q");
@@ -82,7 +77,7 @@ export function SearchPage() {
   }
 
   function applyFilters(next: SearchFilterValues) {
-    const updated = new URLSearchParams(params);
+    const updated = withoutTagParam(params);
     setOrDelete(updated, "minPrice", next.minPrice);
     setOrDelete(updated, "maxPrice", next.maxPrice);
     setOrDelete(updated, "minDiscount", next.minDiscount);
@@ -96,10 +91,6 @@ export function SearchPage() {
     setParams(new URLSearchParams());
     setFiltersOpen(false);
   }
-
-  const suggested = SUGGESTED_TAGS.map((name) => tags.find((item) => item.name === name) ?? { name, count: 0 }).filter(
-    (item) => item.count > 0 || SUGGESTED_TAGS.includes(item.name),
-  );
 
   return (
     <main id="main" className={isLanding ? "search-landing" : "page search-results"}>
@@ -120,14 +111,6 @@ export function SearchPage() {
             Try “red lipstick”, or filter by price and discount.
           </p>
           <SearchBox id="hero-search" value={draftQ} onChange={setDraftQ} onSubmit={onSearch} centered />
-          <div className="tag-cloud" aria-label="Popular categories">
-            {suggested.map((item) => (
-              <Link key={item.name} className="tag" to={tagHref(item.name)}>
-                {item.name}
-                {item.count ? ` · ${item.count}` : ""}
-              </Link>
-            ))}
-          </div>
         </div>
       ) : (
         <>
@@ -139,18 +122,6 @@ export function SearchPage() {
               ? "Loading results."
               : `${products.length} result${products.length === 1 ? "" : "s"}.`}
           </p>
-          <div className="tag-cloud" aria-label="Filter by tag">
-            {tags.slice(0, 24).map((item) => (
-              <Link
-                key={item.name}
-                className="tag"
-                to={tagHref(item.name)}
-                aria-current={tag === item.name ? "page" : undefined}
-              >
-                {item.name} · {item.count}
-              </Link>
-            ))}
-          </div>
           {loading ? (
             <EmptyState title="Searching" body="Loading results." />
           ) : products.length ? (
@@ -184,7 +155,7 @@ function SearchBox({
   return (
     <form className={`search-form ${centered ? "search-form-hero" : "search-form-page"}`} onSubmit={onSubmit} role="search">
       <label className="sr-only" htmlFor={id}>
-        Search products, brands, colors, and tags
+        Search products, brands, and colors
       </label>
       <input
         id={id}
@@ -202,9 +173,4 @@ function setOrDelete(params: URLSearchParams, key: string, value: string) {
   const trimmed = value.trim();
   if (trimmed) params.set(key, trimmed);
   else params.delete(key);
-}
-
-function tagHref(name: string) {
-  const qs = tagSelectionQuery(name);
-  return qs ? `/search?${qs}` : "/search";
 }

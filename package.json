@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Beauti — dark-gold beauty deals, tag search, wishlist, and restock alerts.",
+  "description": "Beauti: dark-gold beauty deals, search, wishlist, and restock alerts.",
   "scripts": {
     "dev": "CI=1 wrangler d1 migrations apply beauti --local && vite",
     "build": "tsc -b && vite build",

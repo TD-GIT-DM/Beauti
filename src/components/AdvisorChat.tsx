@@ -112,7 +112,7 @@ export function AdvisorChat() {
                 <p>Ask for a scent, lipstick, or coverage. Answers stay on Beauti products.</p>
                 <div className="advisor-suggestions">
                   {SUGGESTIONS.map((prompt) => (
-                    <button key={prompt} type="button" className="tag advisor-chip" onClick={() => void ask(prompt)}>
+                    <button key={prompt} type="button" className="advisor-chip" onClick={() => void ask(prompt)}>
                       {prompt}
                     </button>
                   ))}

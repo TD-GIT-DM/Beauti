@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { EmptyState } from "../components/EmptyState";
 import { formatPrice, stockLabel } from "../lib/format";
@@ -100,13 +100,6 @@ export function ProductPage() {
               </div>
             </>
           ) : null}
-          <div className="tag-row">
-            {product.tags.map((tag) => (
-              <Link key={tag} className="tag" to={`/search?tag=${encodeURIComponent(tag)}`}>
-                {tag}
-              </Link>
-            ))}
-          </div>
           <p>
             <ShopLink className="shop-link" href={product.productUrl}>
               View retailer

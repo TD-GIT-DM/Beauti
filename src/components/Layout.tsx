@@ -34,7 +34,7 @@ export function Layout() {
         {onSearchPage ? null : (
           <form className="search-form" onSubmit={onSearch} role="search">
             <label className="sr-only" htmlFor="catalog-search">
-              Search products and tags
+              Search products and brands
             </label>
             <input
               id="catalog-search"
@@ -43,7 +43,7 @@ export function Layout() {
                 setQ(e.target.value);
                 if (e.target.value === "") navigate("/");
               }}
-              placeholder="Search tags, brands, products"
+              placeholder="Search brands, products"
               autoComplete="off"
             />
           </form>

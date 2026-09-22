@@ -22,7 +22,7 @@ Track real markdowns, save a wishlist, and get restock notes. Ask Beauti for cat
 
 Beauti is a dark, quiet catalog of beauty products with honest prices.
 
-Browse a short list of real markdowns on the home screen. Search by tag, brand, or product name. Save a wishlist. Turn on in-app restock and price-drop notes for the items you heart.
+Browse a short list of real markdowns on the home screen. Search by brand, product name, or description. Save a wishlist. Turn on in-app restock and price-drop notes for the items you heart.
 
 Ask Beauti is an on-device chat that only recommends products already in this catalog. It is product matching, not medical advice, and it will not invent items that are not in the list.
 
