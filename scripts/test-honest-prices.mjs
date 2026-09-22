@@ -24,6 +24,10 @@ for (const row of products) {
 const stats = data.stats;
 assert.equal(stats.total, products.length);
 assert.ok(stats.verified > 0, "expected verified prices");
+for (const key of ["flipped", "fakeRemoved", "understatedRaised", "realMarkdowns"]) {
+  assert.equal(typeof stats[key], "number", key);
+  assert.ok(stats[key] >= 0, key);
+}
 console.log(
-  `ok ${products.length} SKUs verified=${stats.verified} clearedDiscounts=${stats.clearedDiscounts} realMarkdowns=${markdowns}`,
+  `ok ${products.length} SKUs verified=${stats.verified} flipped=${stats.flipped} fakeRemoved=${stats.fakeRemoved} understatedRaised=${stats.understatedRaised} realMarkdowns=${markdowns}`,
 );

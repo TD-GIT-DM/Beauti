@@ -5,7 +5,7 @@ import { EmptyState } from "../components/EmptyState";
 import { ProductGrid } from "../components/ProductGrid";
 import { SearchFilters, type SearchFilterValues } from "../components/SearchFilters";
 import { useApp } from "../context/AppContext";
-import { parseOptionalNumber } from "../lib/search";
+import { parseOptionalNumber, tagSelectionQuery } from "../lib/search";
 import type { Product, ProductSort, TagCount } from "../types";
 
 const SUGGESTED_TAGS = ["lipstick", "red", "blush", "foundation", "mascara", "skincare", "fragrance", "hair", "nails", "tools"];
@@ -92,12 +92,8 @@ export function SearchPage() {
   }
 
   function clearFilters() {
-    const updated = new URLSearchParams(params);
-    updated.delete("minPrice");
-    updated.delete("maxPrice");
-    updated.delete("minDiscount");
-    updated.delete("sort");
-    setParams(updated);
+    setDraftQ("");
+    setParams(new URLSearchParams());
     setFiltersOpen(false);
   }
 
@@ -126,7 +122,7 @@ export function SearchPage() {
           <SearchBox id="hero-search" value={draftQ} onChange={setDraftQ} onSubmit={onSearch} centered />
           <div className="tag-cloud" aria-label="Popular categories">
             {suggested.map((item) => (
-              <Link key={item.name} className="tag" to={`/search?tag=${encodeURIComponent(item.name)}`}>
+              <Link key={item.name} className="tag" to={tagHref(item.name)}>
                 {item.name}
                 {item.count ? ` · ${item.count}` : ""}
               </Link>
@@ -148,7 +144,7 @@ export function SearchPage() {
               <Link
                 key={item.name}
                 className="tag"
-                to={tagHref(item.name, params)}
+                to={tagHref(item.name)}
                 aria-current={tag === item.name ? "page" : undefined}
               >
                 {item.name} · {item.count}
@@ -208,8 +204,7 @@ function setOrDelete(params: URLSearchParams, key: string, value: string) {
   else params.delete(key);
 }
 
-function tagHref(name: string, current: URLSearchParams) {
-  const next = new URLSearchParams(current);
-  next.set("tag", name);
-  return `/search?${next.toString()}`;
+function tagHref(name: string) {
+  const qs = tagSelectionQuery(name);
+  return qs ? `/search?${qs}` : "/search";
 }
