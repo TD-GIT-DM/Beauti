@@ -25,13 +25,15 @@
     "catalog:generate:0008": "node scripts/generate-real-product-urls.mjs",
     "catalog:resolve-prices": "python3 scripts/resolve-honest-prices.py",
     "catalog:generate:0009": "node scripts/generate-honest-prices.mjs",
+    "catalog:confirm-prices": "python3 scripts/confirm-prices.py",
+    "catalog:generate:0012": "node scripts/generate-confirm-prices.mjs",
     "catalog:resolve-availability": "python3 scripts/resolve-availability.py",
     "catalog:generate:0010": "node scripts/generate-availability.mjs",
     "catalog:test-urls": "node scripts/test-product-url.mjs",
     "catalog:test-prices": "node scripts/test-honest-prices.mjs",
     "catalog:test-availability": "node scripts/test-availability.mjs",
     "typecheck": "tsc -b --pretty false",
-    "test": "node --experimental-strip-types --test src/lib/theme.test.ts src/lib/advisor.test.ts src/lib/native.test.ts worker/cors.test.ts worker/auth-session.test.ts"
+    "test": "node --experimental-strip-types --test src/lib/theme.test.ts src/lib/advisor.test.ts src/lib/native.test.ts src/services/deals/catalog-sources.test.ts worker/cors.test.ts worker/auth-session.test.ts"
   },
   "dependencies": {
     "@capacitor/app": "^7.0.2",

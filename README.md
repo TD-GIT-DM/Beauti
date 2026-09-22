@@ -52,6 +52,8 @@ Open [http://localhost:5173](http://localhost:5173).
 | `npm run catalog:generate:0008` | Write `0008_real_product_urls.sql` from that JSON |
 | `npm run catalog:resolve-prices` | Sephora catalog JSON + Shopify product JSON + known MSRP → `scripts/data/honest-prices.json` |
 | `npm run catalog:generate:0009` | Write `0009_honest_prices.sql` from that JSON |
+| `npm run catalog:confirm-prices` | Re-check linked Sephora / Shopify JSON and write `scripts/data/confirmed-prices.json` |
+| `npm run catalog:generate:0012` | Write `0012_confirm_prices.sql` for rows whose price or discount changed |
 | `npm run catalog:test-prices` | Assert no invented promo codes; discount only when list > sale |
 | `npm run catalog:resolve-availability` | Sephora catalog JSON + Shopify product JSON → `scripts/data/availability.json` |
 | `npm run catalog:generate:0010` | Write `0010_sync_availability.sql` from that JSON |
@@ -166,6 +168,7 @@ npm run db:migrate:remote    # production D1 — applies pending files in migrat
 | `0008_real_product_urls.sql` | Replaces Google / fake `sephora.com/product/{beauti-id}` links with **verified retailer or brand PDPs** (**441 / 580**: 367 Sephora `-P` pages, 74 official brand PDPs). The other **139** SKUs get a path-only Sephora `/search/{slug}` or Ulta `/brand/{brand}` URL (no `?` in SQL). Do **not** `db.exec` this from `ensureCatalog`. |
 | `0009_honest_prices.sql` | Adds `list_price`, rewrites `price` / `promo_codes` / `deal_score` from Sephora catalog JSON, Shopify product JSON, or known MSRP. Clears invented seed coupons and fake price-history peaks. Do **not** `db.exec` this from `ensureCatalog`. |
 | `0010_sync_availability.sql` | Rewrites `availability` / `restock_estimate` / `deal_score` from the same catalog JSON sources. OOS SKUs keep a restock estimate only when the source provides one; in-stock clears stale estimates. Unverified rows are left unchanged. Do **not** `db.exec` this from `ensureCatalog`. |
+| `0012_confirm_prices.sql` | Confirms `price` / `list_price` / `deal_score` against a fresh Sephora catalog JSON + Shopify `.js` (USD) + brand `products.json` pass. Updates only SKUs whose verified offer changed. Clears a `% off` when the sale is gone, and raises a `% off` when the linked source's markdown is higher. Unverified rows stay as they are. Do **not** `db.exec` this from `ensureCatalog`. |
 
 `INSERT OR IGNORE` so re-applying is safe on an already-seeded database.
 
@@ -211,9 +214,27 @@ python3 scripts/resolve-availability.py             # Sephora catalog + Shopify 
 node scripts/generate-availability.mjs              # writes 0010 from that JSON
 ```
 
-### Re-run price sync
+### Re-run price confirmation
 
-Prices must match the retailer/brand page we link to (or the lowest found current selling price from that source). Do not invent markdowns.
+Prices must match the current sellable price on the linked retailer JSON. Show a `% off` only when that source has a real list/compare-at above the selling price. If the sale ended, clear the badge. If Beauti is showing a smaller markdown than that source, raise it. Do not invent discounts. SKUs with no verified quote are left unchanged.
+
+```bash
+npm run catalog:confirm-prices    # Sephora catalog JSON + Shopify .js?currency=USD + brand products.json
+npm run catalog:generate:0012     # writes migrations/0012_confirm_prices.sql (changed rows only)
+npm test                          # includes catalog price pairing tests
+npm run db:migrate:local          # or db:migrate:remote
+```
+
+`confirm-prices.py` checks, in order:
+
+1. **Sephora catalog search JSON** for a stored `-P` PDP (same product id)
+2. **Shopify `/products/{handle}.js?currency=USD`** for a stored brand PDP (cents, US dollars)
+3. **Brand `products.json`** (dollar strings, not cents) when that `.js` URL 404s, and only when the match is the same size
+4. **Sephora search** for fallback search URLs when the name match is confident and the price is the same size
+
+The production cron (`*/15 * * * *`) quotes a rotating batch with the same rules and writes `price` + `list_price` when the JSON includes them. It requests USD so a non-US edge does not store another currency. It does not persist mock price drops.
+
+The original honest-price migration can still be regenerated, but do not rewrite `0009` for a later confirmation. Apply `0012` on top:
 
 ```bash
 npm run catalog:resolve-prices    # talks to Sephora catalog JSON + Shopify /products/{handle}.js

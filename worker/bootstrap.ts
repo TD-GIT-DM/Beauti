@@ -20,7 +20,7 @@ function executableSql(sql: string): string {
 
 /**
  * Ensure schema + base seed exist. Large aisle files (0004, 0006, 0007, 0008,
- * 0009, 0010) are intentionally NOT auto-applied via db.exec — they are too
+ * 0009, 0010, 0012) are intentionally NOT auto-applied via db.exec — they are too
  * large / numerous for a single D1 exec and 500s the Worker. Apply with
  * wrangler / MCP instead:
  *   npm run db:migrate:local  |  npm run db:migrate:remote
@@ -40,11 +40,11 @@ export async function ensureCatalog(db: D1Database): Promise<void> {
 
   // Expanded catalog + real-image / real-URL / honest-price / availability
   // UPDATEs are applied via remote migrations / MCP seeding — do not db.exec
-  // 0004, 0006, 0007, 0008, 0009, or 0010 here (too large → Worker 500).
+  // 0004, 0006, 0007, 0008, 0009, 0010, or 0012 here (too large → Worker 500).
   const expanded = await db.prepare("SELECT id FROM products WHERE id = ?").bind("mac-ruby-woo").first();
   if (!expanded) {
     console.log(
-      "[beauti] expand catalog not applied yet (mac-ruby-woo missing); serving base catalog. Run npm run db:migrate:remote (0004 + 0006 + 0007 + 0008 + 0009 + 0010).",
+      "[beauti] expand catalog not applied yet (mac-ruby-woo missing); serving base catalog. Run npm run db:migrate:remote (0004 + 0006 + 0007 + 0008 + 0009 + 0010 + 0012).",
     );
     return;
   }
