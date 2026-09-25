@@ -183,6 +183,18 @@ export async function mergeGuestWishlist(db: D1Database, userId: string, deviceI
     .bind(deviceId, now, userId, deviceId)
     .run();
 
+  try {
+    await db
+      .prepare(
+        `INSERT OR IGNORE INTO preorder_wishlist (device_id, preorder_id, user_id, created_at)
+         SELECT ?, preorder_id, ?, COALESCE(created_at, ?) FROM preorder_wishlist WHERE device_id = ?`,
+      )
+      .bind(acct, userId, now, deviceId)
+      .run();
+  } catch {
+    // 0013 is applied by wrangler, not ensureCatalog.
+  }
+
   const { results } = await db
     .prepare(`SELECT DISTINCT product_id FROM wishlist WHERE user_id = ?`)
     .bind(userId)

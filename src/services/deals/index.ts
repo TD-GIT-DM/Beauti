@@ -1,3 +1,4 @@
+import { refreshPreorders } from "./preorder-scan";
 import { quoteCatalogProduct, mapPool, snapshotFromQuote } from "./catalog-sources";
 import { applyForcedEvents, MockRetailerFeed } from "./mock-retailer";
 import type { Availability, CatalogProduct, PromoCode, ScanOptions, ScanSummary } from "./types";
@@ -318,6 +319,19 @@ export async function scanDeals(env: Bindings, options: ScanOptions = {}): Promi
   const summary = options.force
     ? await scanDemo(env, catalog, scanIndex, options.force, nowIso)
     : await scanCatalog(env, catalog, nowIso);
+
+  if (!options.force) {
+    try {
+      const preorders = await refreshPreorders(env, now);
+      summary.preordersChecked = preorders.checked;
+      summary.preordersAdded = preorders.added;
+      summary.preordersLive = preorders.live;
+      summary.preordersRemoved = preorders.removed;
+      summary.notificationsCreated += preorders.notificationsCreated;
+    } catch (err) {
+      console.log(JSON.stringify({ event: "preorder_refresh_fail", err: String(err) }));
+    }
+  }
 
   await env.DEALS_CACHE.put("deals:scan-index", String(scanIndex));
   await env.DEALS_CACHE.put("deals:last-scan", JSON.stringify(summary), { expirationTtl: 60 * 60 * 24 * 7 });

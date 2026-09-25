@@ -64,4 +64,8 @@ export interface ScanSummary {
   becameOutOfStock?: string[];
   fetched?: number;
   unverified?: number;
+  preordersChecked?: number;
+  preordersAdded?: number;
+  preordersLive?: number;
+  preordersRemoved?: number;
 }

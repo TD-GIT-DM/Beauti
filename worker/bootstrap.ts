@@ -20,9 +20,8 @@ function executableSql(sql: string): string {
 
 /**
  * Ensure schema + base seed exist. Large aisle files (0004, 0006, 0007, 0008,
- * 0009, 0010, 0012) are intentionally NOT auto-applied via db.exec — they are too
- * large / numerous for a single D1 exec and 500s the Worker. Apply with
- * wrangler / MCP instead:
+ * 0009, 0010, 0012) and the pre-order seed (0013) are intentionally NOT
+ * auto-applied via db.exec. Apply with wrangler / MCP instead:
  *   npm run db:migrate:local  |  npm run db:migrate:remote
  * If mac-ruby-woo is missing we no-op and keep serving the base catalog.
  */
@@ -39,8 +38,8 @@ export async function ensureCatalog(db: D1Database): Promise<void> {
   }
 
   // Expanded catalog + real-image / real-URL / honest-price / availability
-  // UPDATEs are applied via remote migrations / MCP seeding — do not db.exec
-  // 0004, 0006, 0007, 0008, 0009, 0010, or 0012 here (too large → Worker 500).
+  // UPDATEs, and the pre-order seed, are applied via migrations — do not db.exec
+  // 0004, 0006, 0007, 0008, 0009, 0010, 0012, or 0013 here.
   const expanded = await db.prepare("SELECT id FROM products WHERE id = ?").bind("mac-ruby-woo").first();
   if (!expanded) {
     console.log(

@@ -49,6 +49,9 @@ export function Layout() {
           </form>
         )}
         <nav className="header-actions" aria-label="App">
+          <NavLink className="text-nav" to="/preorder">
+            Pre-order
+          </NavLink>
           <NavLink className="icon-btn" to="/search" aria-label="Search catalog">
             <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="11" cy="11" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.6" />
