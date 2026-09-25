@@ -5,6 +5,7 @@ import type {
   AppNotification,
   Product,
   ProductQuery,
+  PublicPreorder,
   ScanSummary,
 } from "../types";
 import { apiBase, isNativeApp } from "../lib/native";
@@ -123,7 +124,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ force }),
     }),
-  wishlist: () => request<{ products: Product[]; account?: boolean }>("/api/wishlist"),
+  wishlist: () => request<{ products: Product[]; preorders?: PublicPreorder[]; account?: boolean }>("/api/wishlist"),
+  preorders: () => request<{ upcomingDeals: PublicPreorder[]; comingSoon: PublicPreorder[] }>("/api/preorders"),
+  addPreorderWish: (id: string) =>
+    request<{ ok: boolean }>(`/api/preorders/${encodeURIComponent(id)}/wishlist`, { method: "POST" }),
+  removePreorderWish: (id: string) =>
+    request<{ ok: boolean }>(`/api/preorders/${encodeURIComponent(id)}/wishlist`, { method: "DELETE" }),
   addWish: (productId: string) =>
     request<{ ok: boolean }>("/api/wishlist", {
       method: "POST",

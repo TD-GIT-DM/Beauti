@@ -82,6 +82,37 @@ That hits the same 15-minute Cron Trigger path: a rotating batch of SKUs is quot
 - Multi-word queries are **AND-tokenized** (`red lipstick` matches name, brand, description, and private tags that contain both `red` and `lipstick`), then ranked so name and private-tag hits beat a mention in copy. Tags stay in D1 for that matching. They are not shown in the app or returned by the API.
 - Out-of-stock products stay visible; the description includes a **restock estimate** (date range or “unknown / may not return”)
 - **Ask Beauti** — floating catalog advisor. Natural questions are matched against D1 products (name, brand, description, availability, and private tags), then Workers AI writes a short reply from that shortlist only. Replies and cards do not show tags. Cards open `/product/:id`. Off-catalog asks are refused. This is product matching, not medical advice.
+- **Pre-order** — `/preorder` has two lists: upcoming deals, and coming soon products. Both stay empty until a retailer or brand source confirms them. A card leaves the page when its start time passes. Hearts on a coming soon item use the same restock alert once the cron sees the product is actually for sale.
+
+## Pre-order sources
+
+Checked on 25 September 2026. Nothing on this page is guessed from a blog calendar.
+
+| Source | What we keep |
+| --- | --- |
+| Shopify `/products/{handle}.js` and brand `products.json` | Coming soon or pre-order tags, price, compare-at, image, and `available` |
+| The same product page | A coming-soon waitlist with no add to cart button, or the sentence "will ship in {Month}" |
+| Announced sale copy in that JSON | A percent off and a start date that is still in the future, such as "20% off" and "starts November 6, 2026" |
+
+Shops scanned from the allowlist in `src/services/deals/catalog-sources.ts`, plus Makeup by Mario. The first seed is only what that pass confirmed:
+
+- **Fenty Hair** "The Bounce Besties" set: tag `badge|COMING SOON`, not available, $37, pack shot, no release date.
+- **Makeup by Mario** brush trio, cream eyeshadow duo, mini blush duo, and mini lip liner trio: tag `tag:COMING SOON`, waitlist on the product page, no add to cart, prices from the product JSON, no release date.
+- **Olive & June** three holiday calendars: tag `preorder`, prices and compare-at values from the product JSON. The page says orders will ship in October. That is a month, not a clock, so there is no countdown. The compare-at is shown as a value, not a percent off, because the page calls it a value.
+- **Patrick Ta** Pro Signature Brush Collection: tag `badge_coming soon`, not available. No photo, no price, and no release date on the page.
+
+Upcoming deals is empty on purpose. Sephora search JSON did not include an `isComingSoon` flag, and the product JSON endpoint returned 403 from this environment, so no Sephora coming soon row was seeded. Ulta's fall 21 Days of Beauty page describes 28 August through 17 September 2026, which is already over. Third-party calendars for a holiday savings event were not used.
+
+The cron (`*/15 * * * *`, same handler as the catalog scan) re-reads each upcoming row:
+
+1. Fetch the product `.js`. A 404 removes the row. A timeout leaves `last_verified_at` alone.
+2. A pre-order tag, or a coming-soon tag with every variant unavailable, keeps the row.
+3. A coming-soon tag with stock still available stays only when the product page shows a coming-soon waitlist and no add to cart button. An add to cart button means it is live.
+4. "will ship in {Month}" updates the month label. If that sentence is gone, the label becomes "Release date not announced".
+5. A datetime or calendar date that has passed removes the row unless the source published a new future date. If the source now shows a normal in-stock product, the row is marked live, the catalog price is updated when we have one, wishlisted hearts are copied onto that product, and a restock notification is written.
+6. The API hides rows whose last successful check is older than 36 hours, and any row that is not `upcoming`.
+
+Tags are not stored on pre-order rows and are not returned by `/api/preorders`. `0013_preorders.sql` is a normal migration. `ensureCatalog` does not `db.exec` it.
 
 ## Wishlist & notifications
 
@@ -168,6 +199,7 @@ npm run db:migrate:remote    # production D1 — applies pending files in migrat
 | `0009_honest_prices.sql` | Adds `list_price`, rewrites `price` / `promo_codes` / `deal_score` from Sephora catalog JSON, Shopify product JSON, or known MSRP. Clears invented seed coupons and fake price-history peaks. Do **not** `db.exec` this from `ensureCatalog`. |
 | `0010_sync_availability.sql` | Rewrites `availability` / `restock_estimate` / `deal_score` from the same catalog JSON sources. OOS SKUs keep a restock estimate only when the source provides one; in-stock clears stale estimates. Unverified rows are left unchanged. Do **not** `db.exec` this from `ensureCatalog`. |
 | `0012_confirm_prices.sql` | Batched `UPDATE`s for SKUs whose sell price or compare-at changed after a fresh Sephora / Shopify / brand `products.json` check. Raises an understated percent when a real compare-at exists. Clears a percent when the source has no compare-at. Do **not** `db.exec` this from `ensureCatalog`. |
+| `0013_preorders.sql` | Pre-order table plus the coming soon rows verified on 25 September 2026. Do **not** `db.exec` this from `ensureCatalog`. |
 
 `INSERT OR IGNORE` so re-applying is safe on an already-seeded database.
 
@@ -265,6 +297,8 @@ Generators prefer official pack shots from `scripts/lib/catalog-media.mjs` (and 
 | GET | `/api/products?q=&minPrice=&maxPrice=&minDiscount=&sort=&limit=` | Catalog + tokenized search. `q` also matches private tags. `sort`: `deal` (default), `price_asc`, `price_desc`, `discount_desc`. Product JSON omits `tags`. A `tag` query param is ignored. |
 | GET | `/api/products/:id` | Detail + price history. Product JSON omits `tags`. |
 | GET | `/api/deals` | Top 5 by computed discount % |
+| GET | `/api/preorders` | Upcoming deals and coming soon. Omits tags. Hides rows not verified in the last 36 hours. |
+| POST/DELETE | `/api/preorders/:id/wishlist` | Heart a listed pre-order row |
 | POST | `/api/deals/scan` | `{ "force": "cycle" \| "restock" \| "drop" }` |
 | GET/POST/DELETE | `/api/wishlist` | Device-scoped hearts |
 | GET | `/api/notifications` | Inbox |

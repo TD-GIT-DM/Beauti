@@ -95,6 +95,30 @@ export interface AdvisorSearchHint {
   q?: string;
 }
 
+export type PreorderKind = "upcoming_deal" | "coming_soon";
+export type DatePrecision = "datetime" | "date" | "month" | "unconfirmed";
+
+export interface PublicPreorder {
+  id: string;
+  kind: PreorderKind;
+  name: string;
+  brand: string;
+  description: string;
+  imageUrl: string | null;
+  productUrl: string;
+  sourceUrl: string;
+  price: number | null;
+  listPrice: number | null;
+  currency: string;
+  discountPercent: number;
+  startsAt: string | null;
+  endsAt: string | null;
+  datePrecision: DatePrecision;
+  dateLabel: string | null;
+  lastVerifiedAt: string;
+  wishlisted: boolean;
+}
+
 export interface AdvisorResponse {
   reply: string;
   products: AdvisorProduct[];

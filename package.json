@@ -32,7 +32,7 @@
     "catalog:test-prices": "node scripts/test-honest-prices.mjs",
     "catalog:test-availability": "node scripts/test-availability.mjs",
     "typecheck": "tsc -b --pretty false",
-    "test": "node --experimental-strip-types --test src/lib/theme.test.ts src/lib/advisor.test.ts src/lib/native.test.ts src/lib/search.test.ts src/lib/catalog-price.test.ts worker/cors.test.ts worker/auth-session.test.ts"
+    "test": "node --experimental-strip-types --test src/lib/theme.test.ts src/lib/advisor.test.ts src/lib/native.test.ts src/lib/search.test.ts src/lib/catalog-price.test.ts src/lib/preorder.test.ts worker/cors.test.ts worker/auth-session.test.ts"
   },
   "dependencies": {
     "@capacitor/app": "^7.0.2",

@@ -36,6 +36,7 @@ import {
   type ProductRecord,
   type ProductRow,
 } from "./db";
+import { listPublicPreorders, setPreorderWish, wishedPreorderCards } from "./preorders";
 
 
 type AppEnv = { Bindings: Env };
@@ -140,6 +141,26 @@ api.get("/api/products/:id", async (c) => {
   return json({ product: omitStoredTags(product) }, {}, { deviceId });
 });
 
+api.get("/api/preorders", async (c) => {
+  const { deviceId, user } = await actor(c);
+  const lists = await listPublicPreorders(c.env.DB, deviceId, user?.id ?? null);
+  return json(lists, {}, { deviceId });
+});
+
+api.post("/api/preorders/:id/wishlist", async (c) => {
+  const { deviceId, user } = await actor(c);
+  const result = await setPreorderWish(c.env.DB, deviceId, user, c.req.param("id"), true);
+  if (!result.ok) return json({ error: result.error }, { status: result.status }, { deviceId });
+  return json({ ok: true, wishlisted: true, preorderId: c.req.param("id") }, {}, { deviceId });
+});
+
+api.delete("/api/preorders/:id/wishlist", async (c) => {
+  const { deviceId, user } = await actor(c);
+  const result = await setPreorderWish(c.env.DB, deviceId, user, c.req.param("id"), false);
+  if (!result.ok) return json({ error: result.error }, { status: result.status }, { deviceId });
+  return json({ ok: true, wishlisted: false, preorderId: c.req.param("id") }, {}, { deviceId });
+});
+
 api.get("/api/deals", async (c) => {
   const { deviceId, user } = await actor(c);
   const loved = await lovedFor(c, deviceId, user);
@@ -175,7 +196,8 @@ api.post("/api/deals/scan", async (c) => {
 api.get("/api/wishlist", async (c) => {
   const { deviceId, user } = await actor(c);
   const loved = await lovedFor(c, deviceId, user);
-  if (!loved.size) return json({ products: [], deviceId, account: Boolean(user) }, {}, { deviceId });
+  const preorders = await wishedPreorderCards(c.env.DB, deviceId, user?.id ?? null);
+  if (!loved.size) return json({ products: [], preorders, deviceId, account: Boolean(user) }, {}, { deviceId });
   const placeholders = [...loved].map(() => "?").join(",");
   const { results } = await c.env.DB.prepare(
     `SELECT * FROM products WHERE id IN (${placeholders}) ORDER BY name ASC`,
@@ -185,6 +207,7 @@ api.get("/api/wishlist", async (c) => {
   return json(
     {
       products: (await decorateProducts(c.env.DB, results ?? [], loved)).map(omitStoredTags),
+      preorders,
       deviceId,
       account: Boolean(user),
     },

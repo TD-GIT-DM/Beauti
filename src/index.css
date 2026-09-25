@@ -1247,6 +1247,162 @@ img {
   grid-column: 1 / -1;
 }
 
+.text-nav {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--chip-bg);
+  color: var(--gold-text);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.text-nav:hover,
+.text-nav.active {
+  color: var(--gold-text-bright);
+  box-shadow: 0 0 16px rgb(var(--gold-rgb) / 0.28);
+}
+
+.preorder-section {
+  margin-top: 2rem;
+}
+
+.preorder-heading {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  margin: 0 0 0.35rem;
+  color: var(--ink);
+}
+
+.preorder-note,
+.preorder-desc,
+.preorder-checked,
+.preorder-value,
+.preorder-was,
+.preorder-ends {
+  color: var(--muted);
+}
+
+.preorder-note {
+  margin: 0 0 1rem;
+  max-width: 40rem;
+}
+
+.preorder-wish-error {
+  color: var(--danger);
+  margin: 0 0 1rem;
+}
+
+.preorder-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.preorder-card {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: 0.9rem;
+  border: 1px solid var(--gold-dim);
+  border-radius: 18px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.preorder-photo {
+  min-height: 9.5rem;
+  background:
+    radial-gradient(circle at 30% 20%, rgb(var(--gold-rgb) / 0.16), transparent 55%),
+    var(--bg-raised);
+  display: grid;
+  place-items: center;
+}
+.preorder-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.preorder-photo.missing {
+  padding: 0.5rem;
+}
+
+.preorder-copy {
+  padding: 0.85rem 0.9rem 1rem 0;
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+}
+
+.preorder-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.preorder-name {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 1.35rem;
+  line-height: 1.15;
+  margin: 0;
+  color: var(--ink);
+}
+
+.preorder-when {
+  margin: 0;
+  color: var(--gold-text-bright);
+  letter-spacing: 0.04em;
+}
+
+.preorder-ends {
+  display: block;
+  margin-top: 0.15rem;
+}
+
+.preorder-off {
+  background: var(--gold);
+  color: var(--on-gold);
+  border-radius: 999px;
+  padding: 0.12rem 0.55rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.preorder-was {
+  text-decoration: line-through;
+}
+
+.preorder-desc,
+.preorder-checked {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.preorder-checked {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 640px) {
+  .preorder-card {
+    grid-template-columns: 1fr;
+  }
+  .preorder-photo {
+    min-height: 12rem;
+  }
+  .preorder-copy {
+    padding: 0.2rem 0.95rem 1rem;
+  }
+}
+
 @media (max-width: 520px) {
   .header-actions {
     gap: 0.2rem;
@@ -1254,6 +1410,12 @@ img {
   .icon-btn {
     width: 38px;
     height: 38px;
+  }
+  .text-nav {
+    min-height: 38px;
+    padding: 0.3rem 0.45rem;
+    letter-spacing: 0.06em;
+    font-size: 0.62rem;
   }
   .color-editor-head,
   .slider-field {
