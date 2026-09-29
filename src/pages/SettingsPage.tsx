@@ -183,9 +183,9 @@ export function SettingsPage() {
         <section className="settings-panel" aria-labelledby="palette-heading">
           <h2 id="palette-heading">Palette</h2>
           <p className="lede" style={{ margin: 0 }}>
-            Main is the accent (buttons, hearts, borders, links). Secondary tints the vault. On near-black,
-            dragging hue adds a little saturation and light so the tint can show. Text switches between light
-            and dark so it stays readable on the sparkle and your colors.
+            Main is the accent (buttons, hearts, borders, links). Secondary tints cards, the header, and the
+            sparkle. On near-black, dragging hue adds a little saturation and light so the tint can show. Text
+            switches between light and dark so it stays readable.
           </p>
           <ColorSlider
             label="Main"
@@ -195,7 +195,7 @@ export function SettingsPage() {
           />
           <ColorSlider
             label="Secondary"
-            hint="Vault tint, cards, header"
+            hint="Cards, header, sparkle"
             value={theme.secondary}
             onChange={(secondary) => setTheme({ ...theme, secondary })}
           />
