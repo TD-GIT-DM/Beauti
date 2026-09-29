@@ -72,6 +72,8 @@ export interface AccountUser {
   username: string;
   themeMain: string | null;
   themeSecondary: string | null;
+  themeBackground: string | null;
+  themeFont: string | null;
 }
 
 export interface AdvisorProduct {

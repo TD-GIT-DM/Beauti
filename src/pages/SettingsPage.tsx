@@ -1,6 +1,7 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { ColorSlider } from "../components/ColorSlider";
 import { useApp } from "../context/AppContext";
+import { BACKGROUNDS, FONTS, PREVIEW_FONTS_HREF, type BackgroundId, type FontId } from "../lib/look";
 
 export function SettingsPage() {
   const { user, theme, setTheme, resetTheme, signIn, signUp, signOut } = useApp();
@@ -9,6 +10,19 @@ export function SettingsPage() {
   const [busy, setBusy] = useState<"signin" | "signup" | "signout" | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const background = theme.background ?? "black";
+  const font = theme.font ?? "classic";
+
+  useEffect(() => {
+    const id = "beauti-font-preview";
+    if (document.getElementById(id)) return;
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.crossOrigin = "anonymous";
+    link.href = PREVIEW_FONTS_HREF;
+    document.head.appendChild(link);
+  }, []);
 
   async function submit(mode: "signin" | "signup", e: FormEvent) {
     e.preventDefault();
@@ -37,7 +51,7 @@ export function SettingsPage() {
     setNote(null);
     try {
       await signOut();
-      setNote("Signed out. Hearts and colors stay on this device.");
+      setNote("Signed out. Hearts and settings stay on this device.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign out failed.");
     } finally {
@@ -50,8 +64,8 @@ export function SettingsPage() {
       <p className="brand-kicker">Account</p>
       <h1 className="page-title">Settings</h1>
       <p className="lede">
-        Create a username to keep your wishlist on more than one device. Palette sliders change accent and
-        background colors. Guests keep them on this device. Accounts save them.
+        Create a username to keep your wishlist on more than one device. Guests keep colors, sparkle, and font
+        on this device. Accounts save them.
       </p>
 
       <div className="settings-stack">
@@ -112,11 +126,66 @@ export function SettingsPage() {
           {note ? <p className="lede" style={{ margin: 0 }}>{note}</p> : null}
         </section>
 
+        <section className="settings-panel" aria-labelledby="background-heading">
+          <h2 id="background-heading">Background</h2>
+          <p className="lede" style={{ margin: 0 }}>
+            Black Sparkle is the current glitter. Pink Sparkle and Teal Sparkle use the same shimmer in a new
+            color. It covers every page.
+          </p>
+          <div className="look-grid backgrounds" role="radiogroup" aria-labelledby="background-heading">
+            {BACKGROUNDS.map((option) => (
+              <label key={option.id} className={`look-option ${background === option.id ? "selected" : ""}`}>
+                <input
+                  type="radio"
+                  name="beauti-background"
+                  value={option.id}
+                  checked={background === option.id}
+                  onChange={() => setTheme({ ...theme, background: option.id as BackgroundId })}
+                />
+                <span className={`spark-preview ${option.id}`} aria-hidden="true" />
+                <span className="look-copy">
+                  <span className="look-name">{option.label}</span>
+                  <span className="look-detail">{option.detail}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </section>
+
+        <section className="settings-panel" aria-labelledby="font-heading">
+          <h2 id="font-heading">Font</h2>
+          <p className="lede" style={{ margin: 0 }}>
+            The choice covers the whole site. Script styles are for headings. Body text stays in a plainer face
+            so it stays easy to read.
+          </p>
+          <div className="look-grid fonts" role="radiogroup" aria-labelledby="font-heading">
+            {FONTS.map((option) => (
+              <label key={option.id} className={`look-option font-option ${font === option.id ? "selected" : ""}`}>
+                <input
+                  type="radio"
+                  name="beauti-font"
+                  value={option.id}
+                  checked={font === option.id}
+                  onChange={() => setTheme({ ...theme, font: option.id as FontId })}
+                />
+                <span className="font-preview-title" style={{ fontFamily: option.serif }}>
+                  {option.label}
+                </span>
+                <span className="font-preview-body" style={{ fontFamily: option.sans }}>
+                  {option.sample}
+                </span>
+                <span className="look-detail">{option.detail}</span>
+              </label>
+            ))}
+          </div>
+        </section>
+
         <section className="settings-panel" aria-labelledby="palette-heading">
           <h2 id="palette-heading">Palette</h2>
           <p className="lede" style={{ margin: 0 }}>
-            Main is the accent (buttons, hearts, borders, links). Secondary is the background. On near-black,
-            dragging hue adds a little saturation and light so the tint can show.
+            Main is the accent (buttons, hearts, borders, links). Secondary tints cards, the header, and the
+            sparkle. On near-black, dragging hue adds a little saturation and light so the tint can show. Text
+            switches between light and dark so it stays readable.
           </p>
           <ColorSlider
             label="Main"
@@ -126,7 +195,7 @@ export function SettingsPage() {
           />
           <ColorSlider
             label="Secondary"
-            hint="Background, cards, header"
+            hint="Cards, header, sparkle"
             value={theme.secondary}
             onChange={(secondary) => setTheme({ ...theme, secondary })}
           />

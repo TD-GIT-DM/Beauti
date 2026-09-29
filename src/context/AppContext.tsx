@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, getDeviceId, readLocalWishlist, writeLocalWishlist } from "../api/client";
+import { normalizeBackground, normalizeFont } from "../lib/look";
 import {
   applyTheme,
   DEFAULT_THEME,
@@ -74,7 +75,18 @@ async function fireBrowserNotification(n: AppNotification) {
 function adoptAccountTheme(user: AccountUser, fallback: ThemeColors): ThemeColors {
   const main = normalizeHex(user.themeMain ?? "") ?? fallback.main;
   const secondary = normalizeHex(user.themeSecondary ?? "") ?? fallback.secondary;
-  return { main, secondary };
+  const background = user.themeBackground ? normalizeBackground(user.themeBackground) : normalizeBackground(fallback.background);
+  const font = user.themeFont ? normalizeFont(user.themeFont) : normalizeFont(fallback.font);
+  return { main, secondary, background, font };
+}
+
+function themePayload(theme: ThemeColors) {
+  return {
+    themeMain: theme.main,
+    themeSecondary: theme.secondary,
+    themeBackground: normalizeBackground(theme.background),
+    themeFont: normalizeFont(theme.font),
+  };
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -141,7 +153,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         persistTheme(adoptAccountTheme(nextUser, current));
       } else {
         persistTheme(current);
-        await api.saveSettings({ themeMain: current.main, themeSecondary: current.secondary }).catch(() => undefined);
+        await api.saveSettings(themePayload(current)).catch(() => undefined);
       }
       if (remoteWishlist) {
         applyWishlist(remoteWishlist);
@@ -161,7 +173,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     const timer = window.setTimeout(() => {
       void api
-        .saveSettings({ themeMain: theme.main, themeSecondary: theme.secondary })
+        .saveSettings(themePayload(theme))
         .catch(() => undefined);
     }, 450);
     return () => window.clearTimeout(timer);

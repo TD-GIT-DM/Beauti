@@ -24,8 +24,15 @@
   --danger: #c47a7a;
   --ok: #8aa37a;
   --shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+  --spark-1-rgb: var(--gold-bright-rgb);
+  --spark-2-rgb: var(--ink-rgb);
+  --spark-3-rgb: var(--gold-rgb);
+  --spark-hot-rgb: 255 244 220;
+  --spark-glow-rgb: var(--gold-rgb);
   --font-serif: "Cormorant Garamond", "Times New Roman", serif;
   --font-sans: "Outfit", system-ui, sans-serif;
+  --body-scale: 1;
+  --heading-scale: 1;
   --header-h: calc(3.4rem + max(0.85rem, env(safe-area-inset-top)));
   color-scheme: dark;
 }
@@ -52,6 +59,7 @@ html {
 
 body {
   font-family: var(--font-sans);
+  font-size: calc(1rem * var(--body-scale, 1));
   font-weight: 400;
   color: var(--ink);
   background:
@@ -61,25 +69,88 @@ body {
   letter-spacing: 0.01em;
 }
 
-body::before {
+html[data-bg="pink"] body,
+html[data-bg="teal"] body {
+  background:
+    radial-gradient(980px 640px at 12% -12%, rgb(var(--spark-glow-rgb) / 0.22), transparent 54%),
+    radial-gradient(1100px 720px at 100% 8%, rgb(var(--spark-glow-rgb) / 0.16), transparent 50%),
+    radial-gradient(820px 520px at 40% 115%, rgb(var(--spark-glow-rgb) / 0.12), transparent 52%),
+    var(--bg);
+}
+
+body::before,
+body::after {
   content: "";
   pointer-events: none;
   position: fixed;
   inset: 0;
   z-index: 0;
+}
+
+body::before {
   opacity: 0.45;
   background-image:
-    radial-gradient(circle at 18% 22%, rgb(var(--gold-bright-rgb) / 0.16) 0 0.6px, transparent 1.2px),
-    radial-gradient(circle at 72% 38%, rgb(var(--ink-rgb) / 0.12) 0 0.5px, transparent 1px),
-    radial-gradient(circle at 40% 78%, rgb(var(--gold-rgb) / 0.14) 0 0.7px, transparent 1.4px),
-    radial-gradient(circle at 88% 84%, rgb(var(--gold-bright-rgb) / 0.1) 0 0.4px, transparent 0.9px);
+    radial-gradient(circle at 18% 22%, rgb(var(--spark-1-rgb) / 0.16) 0 0.6px, transparent 1.2px),
+    radial-gradient(circle at 72% 38%, rgb(var(--spark-2-rgb) / 0.12) 0 0.5px, transparent 1px),
+    radial-gradient(circle at 40% 78%, rgb(var(--spark-3-rgb) / 0.14) 0 0.7px, transparent 1.4px),
+    radial-gradient(circle at 88% 84%, rgb(var(--spark-1-rgb) / 0.1) 0 0.4px, transparent 0.9px);
   background-size: 140px 140px, 90px 90px, 170px 170px, 110px 110px;
   animation: glitter 18s linear infinite;
 }
 
+html[data-bg="pink"] body::before,
+html[data-bg="teal"] body::before {
+  opacity: 0.72;
+}
+
+body::after {
+  background-image:
+    radial-gradient(circle at 16% 20%, rgb(var(--spark-hot-rgb) / 0.95) 0 1px, rgb(var(--spark-hot-rgb) / 0.28) 1.8px, transparent 3.2px),
+    radial-gradient(circle at 64% 30%, rgb(var(--spark-1-rgb) / 0.9) 0 1.15px, transparent 2.6px),
+    radial-gradient(circle at 42% 64%, rgb(var(--spark-hot-rgb) / 0.85) 0 0.85px, rgb(var(--spark-3-rgb) / 0.25) 1.7px, transparent 3px),
+    radial-gradient(circle at 84% 74%, rgb(var(--spark-2-rgb) / 0.8) 0 1.2px, transparent 2.7px),
+    radial-gradient(circle at 28% 86%, rgb(var(--spark-3-rgb) / 0.85) 0 0.9px, transparent 2.2px),
+    radial-gradient(circle at 52% 14%, rgb(var(--spark-hot-rgb) / 0.75) 0 0.7px, transparent 1.9px),
+    radial-gradient(circle at 8% 48%, rgb(var(--spark-1-rgb) / 0.7) 0 0.8px, transparent 2px),
+    radial-gradient(circle at 92% 42%, rgb(var(--spark-hot-rgb) / 0.8) 0 1px, transparent 2.4px);
+  background-size: 280px 320px, 340px 260px, 240px 300px, 360px 280px, 220px 260px, 300px 220px, 260px 240px, 320px 300px;
+  animation: glitter 24s linear infinite reverse, twinkle-soft 4.2s ease-in-out infinite;
+}
+
+html[data-bg="pink"] body::after,
+html[data-bg="teal"] body::after {
+  animation: glitter 22s linear infinite reverse, twinkle 3.2s ease-in-out infinite;
+}
+
 @keyframes glitter {
-  from { background-position: 0 0, 0 0, 0 0, 0 0; }
-  to { background-position: 140px 80px, -90px 40px, 60px -80px, -40px 110px; }
+  from { background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0; }
+  to { background-position: 140px 80px, -90px 40px, 60px -80px, -40px 110px, 90px -70px, -80px 100px, 50px 80px, -110px -40px; }
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.42; }
+  50% { opacity: 0.95; }
+}
+
+@keyframes twinkle-soft {
+  0%, 100% { opacity: 0.28; }
+  50% { opacity: 0.62; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  body::after,
+  html[data-bg="pink"] body::before,
+  html[data-bg="pink"] body::after,
+  html[data-bg="teal"] body::before,
+  html[data-bg="teal"] body::after,
+  .spark-preview::before,
+  .spark-preview::after {
+    animation: none;
+  }
+  body::after {
+    opacity: 0.55;
+  }
 }
 
 #root {
@@ -149,12 +220,33 @@ img {
 
 .wordmark {
   font-family: var(--font-serif);
-  font-size: 1.65rem;
+  font-size: calc(1.65rem * var(--heading-scale, 1));
   font-weight: 500;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--gold-text-bright);
   text-shadow: 0 0 18px rgb(var(--gold-rgb) / 0.35);
+}
+
+html[data-font="pacifico"] .wordmark,
+html[data-font="dancing"] .wordmark {
+  text-transform: none;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+}
+
+html[data-font="pacifico"] :is(.page-title, .product-name, .settings-panel h2, .advisor-head h2, .preorder-name),
+html[data-font="dancing"] :is(.page-title, .product-name, .settings-panel h2, .advisor-head h2, .preorder-name) {
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+
+html[data-font="quicksand"] body,
+html[data-font="comfortaa"] body,
+html[data-font="fredoka"] body,
+html[data-font="baloo"] body,
+html[data-font="pacifico"] body {
+  line-height: 1.55;
 }
 
 .search-form {
@@ -389,7 +481,7 @@ img {
 .product-name {
   font-family: var(--font-serif);
   font-weight: 500;
-  font-size: clamp(1.7rem, 5vw, 3.1rem);
+  font-size: calc(clamp(1.7rem, 5vw, 3.1rem) * var(--heading-scale, 1));
   line-height: 1.05;
   margin: 0;
   color: var(--ink);
@@ -397,6 +489,12 @@ img {
 
 .cover.grid .product-name {
   font-size: 1.25rem;
+}
+
+html[data-font="pacifico"] .cover.grid .product-name,
+html[data-font="dancing"] .cover.grid .product-name {
+  font-size: 1.45rem;
+  line-height: 1.2;
 }
 
 .price-row {
@@ -478,7 +576,7 @@ img {
 
 .page-title {
   font-family: var(--font-serif);
-  font-size: clamp(2rem, 5vw, 3.4rem);
+  font-size: calc(clamp(2rem, 5vw, 3.4rem) * var(--heading-scale, 1));
   font-weight: 500;
   margin: 0 0 0.35rem;
   color: var(--ink);
@@ -835,7 +933,7 @@ img {
 .settings-panel h2 {
   font-family: var(--font-serif);
   font-weight: 500;
-  font-size: 1.7rem;
+  font-size: calc(1.7rem * var(--heading-scale, 1));
   margin: 0;
   color: var(--ink);
 }
@@ -877,6 +975,157 @@ img {
   margin: 0;
   color: var(--danger);
   font-size: 0.9rem;
+}
+
+.look-grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.look-grid.fonts {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 560px) {
+  .look-grid.backgrounds {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .look-grid.fonts {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.look-option {
+  position: relative;
+  display: grid;
+  gap: 0.4rem;
+  align-content: start;
+  padding: 0.7rem;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgb(var(--bg-rgb) / 0.45);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.look-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.look-option.selected,
+.look-option:has(input:checked) {
+  border-color: var(--gold-text);
+  box-shadow: 0 0 0 1px var(--gold-text);
+}
+
+.look-option:focus-within {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.look-copy {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.look-name {
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.look-detail,
+.font-preview-body {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.font-preview-title {
+  font-size: 1.65rem;
+  line-height: 1.15;
+  color: var(--ink);
+}
+
+.font-preview-body {
+  font-size: 0.95rem;
+}
+
+.spark-preview {
+  position: relative;
+  display: block;
+  height: 4.5rem;
+  border-radius: 12px;
+  overflow: hidden;
+  background:
+    radial-gradient(80px 50px at 80% 0%, rgb(212 175 55 / 0.28), transparent 70%),
+    #070707;
+}
+
+.spark-preview.pink {
+  background:
+    radial-gradient(90px 60px at 10% 0%, rgb(232 106 166 / 0.55), transparent 70%),
+    radial-gradient(80px 50px at 100% 80%, rgb(255 208 228 / 0.28), transparent 68%),
+    #5a2348;
+}
+
+.spark-preview.teal {
+  background:
+    radial-gradient(90px 60px at 10% 0%, rgb(43 187 173 / 0.5), transparent 70%),
+    radial-gradient(80px 50px at 100% 90%, rgb(126 224 216 / 0.28), transparent 68%),
+    #0f4c50;
+}
+
+.spark-preview::before,
+.spark-preview::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.spark-preview::before {
+  opacity: 0.85;
+  background-image:
+    radial-gradient(circle at 18% 30%, rgb(255 244 220 / 0.95) 0 1px, transparent 2.2px),
+    radial-gradient(circle at 70% 40%, rgb(227 209 152 / 0.9) 0 0.8px, transparent 1.8px),
+    radial-gradient(circle at 40% 75%, rgb(255 255 255 / 0.8) 0 0.7px, transparent 1.6px),
+    radial-gradient(circle at 84% 72%, rgb(212 175 55 / 0.85) 0 1px, transparent 2px);
+  background-size: 48px 48px, 36px 36px, 54px 42px, 40px 46px;
+  animation: glitter 9s linear infinite;
+}
+
+.spark-preview.pink::before {
+  background-image:
+    radial-gradient(circle at 18% 30%, rgb(255 255 255 / 0.95) 0 1px, transparent 2.2px),
+    radial-gradient(circle at 70% 40%, rgb(255 208 228 / 0.95) 0 0.9px, transparent 1.9px),
+    radial-gradient(circle at 40% 75%, rgb(242 163 196 / 0.9) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 84% 72%, rgb(255 246 251 / 0.9) 0 1px, transparent 2.1px);
+}
+
+.spark-preview.teal::before {
+  background-image:
+    radial-gradient(circle at 18% 30%, rgb(255 255 255 / 0.95) 0 1px, transparent 2.2px),
+    radial-gradient(circle at 70% 40%, rgb(201 255 246 / 0.95) 0 0.9px, transparent 1.9px),
+    radial-gradient(circle at 40% 75%, rgb(126 224 216 / 0.9) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 84% 72%, rgb(243 255 253 / 0.9) 0 1px, transparent 2.1px);
+}
+
+.spark-preview::after {
+  background-image:
+    radial-gradient(circle at 30% 22%, rgb(255 255 255 / 0.95) 0 1.1px, transparent 2.8px),
+    radial-gradient(circle at 62% 68%, rgb(255 255 255 / 0.8) 0 0.9px, transparent 2.3px);
+  background-size: 70px 64px, 86px 72px;
+  animation: twinkle 2.6s ease-in-out infinite;
 }
 
 .color-editor {

@@ -27,6 +27,8 @@ export interface AuthUser {
   username: string;
   themeMain: string | null;
   themeSecondary: string | null;
+  themeBackground: string | null;
+  themeFont: string | null;
 }
 
 interface UserRow {
@@ -36,6 +38,8 @@ interface UserRow {
   password_salt: string | null;
   theme_main: string | null;
   theme_secondary: string | null;
+  theme_background: string | null;
+  theme_font: string | null;
 }
 
 export function accountScope(userId: string): string {
@@ -112,6 +116,8 @@ function mapUser(row: UserRow): AuthUser | null {
     username: row.username,
     themeMain: row.theme_main,
     themeSecondary: row.theme_secondary,
+    themeBackground: row.theme_background,
+    themeFont: row.theme_font,
   };
 }
 
@@ -121,7 +127,8 @@ export async function userFromRequest(request: Request, db: D1Database): Promise
   const now = new Date().toISOString();
   const row = await db
     .prepare(
-      `SELECT u.id, u.username, u.password_hash, u.password_salt, u.theme_main, u.theme_secondary
+      `SELECT u.id, u.username, u.password_hash, u.password_salt, u.theme_main, u.theme_secondary,
+              u.theme_background, u.theme_font
        FROM sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.id = ? AND s.expires_at > ?`,
@@ -134,7 +141,8 @@ export async function userFromRequest(request: Request, db: D1Database): Promise
 export async function findUserByUsername(db: D1Database, username: string): Promise<UserRow | null> {
   return db
     .prepare(
-      `SELECT id, username, password_hash, password_salt, theme_main, theme_secondary
+      `SELECT id, username, password_hash, password_salt, theme_main, theme_secondary,
+              theme_background, theme_font
        FROM users WHERE username = ?`,
     )
     .bind(username)

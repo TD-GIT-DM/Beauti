@@ -158,9 +158,27 @@ export const api = {
     writeStoredSessionId(null);
     return result;
   },
-  settings: () => request<{ themeMain: string | null; themeSecondary: string | null; username: string }>("/api/settings"),
-  saveSettings: (theme: { themeMain: string; themeSecondary: string }) =>
-    request<{ ok: boolean; themeMain: string | null; themeSecondary: string | null }>("/api/settings", {
+  settings: () =>
+    request<{
+      themeMain: string | null;
+      themeSecondary: string | null;
+      themeBackground: string | null;
+      themeFont: string | null;
+      username: string;
+    }>("/api/settings"),
+  saveSettings: (theme: {
+    themeMain: string;
+    themeSecondary: string;
+    themeBackground: string;
+    themeFont: string;
+  }) =>
+    request<{
+      ok: boolean;
+      themeMain: string | null;
+      themeSecondary: string | null;
+      themeBackground: string | null;
+      themeFont: string | null;
+    }>("/api/settings", {
       method: "PATCH",
       body: JSON.stringify(theme),
     }),
