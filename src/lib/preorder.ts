@@ -33,6 +33,10 @@ export interface PreorderEntry {
   status: PreorderStatus;
   linkedProductId: string | null;
   lastVerifiedAt: string | null;
+  /** When this row was last fetched, including a failed check. */
+  lastCheckedAt: string | null;
+  /** Why the last check could not refresh lastVerifiedAt. Null after a successful check. */
+  lastCheckError: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -59,7 +63,7 @@ export type SourceReading =
       datePrecision?: DatePrecision;
       dateLabel?: string | null;
     }
-  | { ok: false };
+  | { ok: false; error?: string };
 
 export interface PreorderRow {
   id: string;
@@ -82,6 +86,8 @@ export interface PreorderRow {
   status: string;
   linked_product_id: string | null;
   last_verified_at: string | null;
+  last_checked_at?: string | null;
+  last_check_error?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -100,6 +106,16 @@ const MONTHS = [
   "November",
   "December",
 ];
+
+/** Product JSON (`.js`, `products.json`). Do not send this on the storefront page. */
+export const SHOPIFY_JSON_ACCEPT = "application/json";
+/**
+ * Storefront HTML. Shopify varies on Accept and returns a product JSON document
+ * when application/json is preferred. That document has tags and a price, and
+ * no waitlist button, so a coming-soon product that is still marked available
+ * cannot be confirmed from it.
+ */
+export const SHOPIFY_HTML_ACCEPT = "text/html,application/xhtml+xml";
 
 const COMING_TAG =
   /^(coming[\s-]?soon|tag:\s*coming soon|badge\|coming soon|badge_coming soon)$/i;
@@ -290,15 +306,36 @@ export function entryFromRow(row: PreorderRow): PreorderEntry | null {
     status: row.status,
     linkedProductId: row.linked_product_id,
     lastVerifiedAt: row.last_verified_at,
+    lastCheckedAt: row.last_checked_at ?? null,
+    lastCheckError: row.last_check_error ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
+function checkErrorText(raw: string | undefined): string {
+  const text = (raw || "unverified").replace(/\s+/g, " ").trim().slice(0, 180);
+  return text || "unverified";
+}
+
 export function applyReading(entry: PreorderEntry, reading: SourceReading, nowIso: string): PreorderEntry {
-  if (!reading.ok) return entry;
+  if (!reading.ok) {
+    return {
+      ...entry,
+      lastCheckedAt: nowIso,
+      lastCheckError: checkErrorText(reading.error),
+      updatedAt: nowIso,
+    };
+  }
   if (!reading.found) {
-    return { ...entry, status: "removed", lastVerifiedAt: nowIso, updatedAt: nowIso };
+    return {
+      ...entry,
+      status: "removed",
+      lastVerifiedAt: nowIso,
+      lastCheckedAt: nowIso,
+      lastCheckError: null,
+      updatedAt: nowIso,
+    };
   }
   const next: PreorderEntry = {
     ...entry,
@@ -318,6 +355,8 @@ export function applyReading(entry: PreorderEntry, reading: SourceReading, nowIs
     datePrecision: reading.datePrecision ?? entry.datePrecision,
     dateLabel: reading.dateLabel === undefined ? entry.dateLabel : reading.dateLabel,
     lastVerifiedAt: nowIso,
+    lastCheckedAt: nowIso,
+    lastCheckError: null,
     updatedAt: nowIso,
   };
   if (reading.nowLive) return { ...next, status: "live" };
@@ -325,6 +364,18 @@ export function applyReading(entry: PreorderEntry, reading: SourceReading, nowIs
   const nowMs = Date.parse(nowIso);
   if (Number.isFinite(nowMs) && isElapsed(next, nowMs)) return { ...next, status: "removed" };
   return { ...next, status: "upcoming" };
+}
+
+/**
+ * The product page is storefront HTML. A JSON body (Shopify's Accept: application/json
+ * product document) is not that page, even when it includes a coming-soon tag.
+ */
+export function storefrontHtml(text: string, contentType: string | null): string | null {
+  if (!text.trim()) return null;
+  if (contentType && /json/i.test(contentType)) return null;
+  const trimmed = text.trimStart();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) return null;
+  return text;
 }
 
 export function classifyComingSoonPage(html: string): "pending" | "live" | "unknown" {
@@ -403,14 +454,27 @@ function brandName(vendor: unknown, host: string): string {
   return host;
 }
 
+function httpsImage(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("https://")) return trimmed.split("?")[0];
+  if (trimmed.startsWith("//")) return `https:${trimmed.split("?")[0]}`;
+  return null;
+}
+
 function firstImage(product: ShopifyReadInput): string | null {
   const candidates: unknown[] = [product.featured_image];
   if (Array.isArray(product.images)) candidates.push(product.images[0]);
   for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.startsWith("https://")) return candidate.split("?")[0];
+    if (typeof candidate === "string") {
+      const image = httpsImage(candidate);
+      if (image) return image;
+    }
     if (candidate && typeof candidate === "object" && "src" in candidate) {
       const src = (candidate as { src?: unknown }).src;
-      if (typeof src === "string" && src.startsWith("https://")) return src.split("?")[0];
+      if (typeof src === "string") {
+        const image = httpsImage(src);
+        if (image) return image;
+      }
     }
   }
   return null;
@@ -490,9 +554,9 @@ export function interpretShopifyProduct(product: ShopifyReadInput | null, ctx: S
   };
 
   if (signal === "coming_ambiguous") {
-    if (!ctx.pageLoaded || ctx.pageHtml == null) return { ok: false };
+    if (!ctx.pageLoaded || ctx.pageHtml == null) return { ok: false, error: "page_not_loaded" };
     const page = classifyComingSoonPage(ctx.pageHtml);
-    if (page === "unknown") return { ok: false };
+    if (page === "unknown") return { ok: false, error: "page_unclassified" };
     if (page === "live") {
       return { ...base, stillPending: false, nowLive: true, kind: "coming_soon", datePrecision: "unconfirmed", dateLabel: null, startsAt: null };
     }
@@ -588,6 +652,8 @@ export function entryFromReading(id: string, reading: SourceReading, nowIso: str
     status: "upcoming",
     linkedProductId: null,
     lastVerifiedAt: nowIso,
+    lastCheckedAt: nowIso,
+    lastCheckError: null,
     createdAt: nowIso,
     updatedAt: nowIso,
   };

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   applyReading,
@@ -13,6 +14,9 @@ import {
   plainText,
   preorderTiming,
   readAnnouncedSale,
+  SHOPIFY_HTML_ACCEPT,
+  SHOPIFY_JSON_ACCEPT,
+  storefrontHtml,
   toPublicPreorder,
   type PreorderEntry,
   type ShopifyReadContext,
@@ -43,6 +47,8 @@ function entry(overrides: Partial<PreorderEntry> = {}): PreorderEntry {
     status: "upcoming",
     linkedProductId: null,
     lastVerifiedAt: NOW,
+    lastCheckedAt: null,
+    lastCheckError: null,
     createdAt: NOW,
     updatedAt: NOW,
     ...overrides,
@@ -132,6 +138,8 @@ test("public preorders omit tags and only confirm a real discount", () => {
   assert.equal(pub.discountPercent, 0);
   assert.equal(pub.wishlisted, true);
   assert.equal(Object.hasOwn(pub, "tags"), false);
+  assert.equal(Object.hasOwn(pub, "lastCheckError"), false);
+  assert.equal(Object.hasOwn(pub, "lastCheckedAt"), false);
   assert.equal(listedDiscount(entry({ price: 60, listPrice: 128, discountConfirmed: true, announcedPercent: null })), 53);
   assert.equal(listedDiscount(entry({ announcedPercent: 20, discountConfirmed: true, price: null })), 20);
   assert.equal(listedDiscount(entry({ price: 0, listPrice: 40, discountConfirmed: true })), 0);
@@ -139,9 +147,12 @@ test("public preorders omit tags and only confirm a real discount", () => {
 
 test("failed checks do not refresh verification, and a passed start is removed", () => {
   const original = entry({ lastVerifiedAt: "2026-09-24T00:00:00.000Z" });
-  const failed = applyReading(original, { ok: false }, NOW);
+  const failed = applyReading(original, { ok: false, error: "page_not_html" }, NOW);
   assert.equal(failed.lastVerifiedAt, "2026-09-24T00:00:00.000Z");
   assert.equal(failed.status, "upcoming");
+  assert.equal(failed.lastCheckedAt, NOW);
+  assert.equal(failed.lastCheckError, "page_not_html");
+  assert.equal(applyReading(original, { ok: false }, NOW).lastCheckError, "unverified");
 
   const missing = applyReading(original, { ok: true, found: false, stillPending: false, nowLive: false }, NOW);
   assert.equal(missing.status, "removed");
@@ -176,9 +187,16 @@ test("failed checks do not refresh verification, and a passed start is removed",
   assert.equal(moved.status, "upcoming");
   assert.equal(moved.startsAt, "2026-12-01T15:00:00.000Z");
 
-  const live = applyReading(original, { ok: true, found: true, stillPending: false, nowLive: true, price: 37 }, NOW);
+  const live = applyReading(
+    { ...original, lastCheckError: "page_not_html", lastCheckedAt: "2026-09-24T00:00:00.000Z" },
+    { ok: true, found: true, stillPending: false, nowLive: true, price: 37 },
+    NOW,
+  );
   assert.equal(live.status, "live");
   assert.equal(live.price, 37);
+  assert.equal(live.lastVerifiedAt, NOW);
+  assert.equal(live.lastCheckedAt, NOW);
+  assert.equal(live.lastCheckError, null);
 });
 
 test("shopify coming soon, preorder, and waitlist pages stay pending", () => {
@@ -255,6 +273,7 @@ test("shopify coming soon, preorder, and waitlist pages stay pending", () => {
     ctx({ host: "makeupbymario.com", pageLoaded: false }),
   );
   assert.equal(unchecked.ok, false);
+  if (!unchecked.ok) assert.equal(unchecked.error, "page_not_loaded");
 });
 
 test("an available product with a stale coming soon tag is live once add to cart is on the page", () => {
@@ -355,4 +374,114 @@ test("database rows with a zero price do not become a public price", () => {
   const pub = toPublicPreorder(parsed, false, NOW_MS);
   assert.equal(pub?.price, null);
   assert.equal(pub?.discountPercent, 0);
+});
+
+test("a coming-soon product that is still marked available is confirmed from the waitlist page, not the JSON document", () => {
+  assert.equal(SHOPIFY_JSON_ACCEPT, "application/json");
+  assert.equal(SHOPIFY_HTML_ACCEPT.includes("application/json"), false);
+  assert.match(SHOPIFY_HTML_ACCEPT, /^text\/html/);
+
+  const product = {
+    title: "Mario's Face & Eye Brush Trio",
+    vendor: "MAKEUP BY MARIO",
+    tags: ["coming-soon", "tag:COMING SOON"],
+    description: "Limited-edition set of three dual-ended face & eye brushes.",
+    available: true,
+    price: 7900,
+    featured_image:
+      "//cdn.shopify.com/s/files/1/0275/4822/1505/files/MBM_H26_PACKSHOT_BBRUSH_SET_BAG_NOBOX_03_MBM.jpg?v=1",
+    variants: [{ available: true, price: 7900 }],
+  };
+  const jsonPage = JSON.stringify({
+    product: {
+      title: "Mario's Face & Eye Brush Trio",
+      tags: "coming-soon, tag:COMING SOON",
+      variants: [{ price: "79.00" }],
+    },
+  });
+  assert.equal(storefrontHtml(jsonPage, "application/json; charset=utf-8"), null);
+  assert.equal(storefrontHtml(jsonPage, null), null);
+  const fromJson = interpretShopifyProduct(
+    product,
+    ctx({ host: "www.makeupbymario.com", unit: "cents", pageLoaded: true, pageHtml: jsonPage }),
+  );
+  assert.equal(fromJson.ok, false);
+  if (!fromJson.ok) assert.equal(fromJson.error, "page_unclassified");
+
+  const html =
+    '<button class="js-open-modal-coming-soon">COMING SOON: JOIN THE WAITLIST</button>';
+  assert.equal(storefrontHtml(html, "text/html; charset=utf-8"), html);
+  const pending = interpretShopifyProduct(
+    product,
+    ctx({
+      host: "www.makeupbymario.com",
+      unit: "cents",
+      pageLoaded: true,
+      pageHtml: html,
+      productUrl: "https://www.makeupbymario.com/products/marios-face-eye-brush-trio",
+      sourceUrl: "https://www.makeupbymario.com/products/marios-face-eye-brush-trio",
+    }),
+  );
+  assert.equal(pending.ok && pending.stillPending, true);
+  assert.equal(pending.ok && pending.nowLive, false);
+  assert.equal(pending.ok && pending.kind, "coming_soon");
+  assert.equal(pending.ok && pending.price, 79);
+  assert.equal(pending.ok && pending.brand, "Makeup by Mario");
+  assert.equal(
+    pending.ok && pending.imageUrl,
+    "https://cdn.shopify.com/s/files/1/0275/4822/1505/files/MBM_H26_PACKSHOT_BBRUSH_SET_BAG_NOBOX_03_MBM.jpg",
+  );
+
+  const both = interpretShopifyProduct(
+    product,
+    ctx({
+      host: "www.makeupbymario.com",
+      unit: "cents",
+      pageLoaded: true,
+      pageHtml: `${html}<button data-add-to-cart></button>`,
+    }),
+  );
+  assert.equal(both.ok, false);
+  if (!both.ok) assert.equal(both.error, "page_unclassified");
+
+  const saved = applyReading(
+    entry({
+      id: "shopify:makeupbymario.com:marios-face-eye-brush-trio",
+      name: "Mario's Face & Eye Brush Trio",
+      brand: "Makeup by Mario",
+      productUrl: "https://www.makeupbymario.com/products/marios-face-eye-brush-trio",
+      sourceUrl: "https://www.makeupbymario.com/products/marios-face-eye-brush-trio",
+      price: 79,
+      lastVerifiedAt: "2026-09-25T05:25:51Z",
+      lastCheckError: "page_unclassified",
+    }),
+    pending,
+    "2026-09-29T03:15:00.000Z",
+  );
+  assert.equal(saved.status, "upcoming");
+  assert.equal(saved.lastVerifiedAt, "2026-09-29T03:15:00.000Z");
+  assert.equal(saved.lastCheckedAt, "2026-09-29T03:15:00.000Z");
+  assert.equal(saved.lastCheckError, null);
+  assert.equal(saved.price, 79);
+});
+
+test("preorder check columns are a wrangler migration and are not exec'd from ensureCatalog", () => {
+  const boot = readFileSync(new URL("../../worker/bootstrap.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(boot, /0015_preorder_checks\.sql/);
+  assert.match(boot, /0015/);
+  const sql = readFileSync(new URL("../../migrations/0015_preorder_checks.sql", import.meta.url), "utf8");
+  assert.match(sql, /ALTER TABLE preorders ADD COLUMN last_checked_at TEXT/);
+  assert.match(sql, /ALTER TABLE preorders ADD COLUMN last_check_error TEXT/);
+  const statements = sql
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n");
+  assert.doesNotMatch(statements, /db\.exec/);
+  assert.doesNotMatch(statements, /UPDATE\s+preorders/i);
+  assert.equal(statements.trim().split(";").filter((part) => part.trim()).length, 2);
+  const scan = readFileSync(new URL("../services/deals/preorder-scan.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(scan, /application\/json,text\/html/);
+  assert.match(scan, /SHOPIFY_HTML_ACCEPT/);
+  assert.match(scan, /preorder_check_fail/);
+  assert.match(scan, /last_check_error/);
 });

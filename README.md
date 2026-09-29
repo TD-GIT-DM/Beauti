@@ -105,9 +105,9 @@ Upcoming deals is empty on purpose. Sephora search JSON did not include an `isCo
 
 The cron (`*/15 * * * *`, same handler as the catalog scan) re-reads each upcoming row:
 
-1. Fetch the product `.js`. A 404 removes the row. A timeout leaves `last_verified_at` alone.
+1. Fetch the product `.js` with `Accept: application/json`. A 404 removes the row. A timeout or any other failed check leaves `last_verified_at` alone, writes `last_checked_at` and `last_check_error`, and logs `preorder_check_fail`.
 2. A pre-order tag, or a coming-soon tag with every variant unavailable, keeps the row.
-3. A coming-soon tag with stock still available stays only when the product page shows a coming-soon waitlist and no add to cart button. An add to cart button means it is live.
+3. A coming-soon tag with stock still available stays only when the product page shows a coming-soon waitlist and no add to cart button. That page is requested as HTML (`Accept: text/html`). Shopify returns a product JSON document when `application/json` is preferred, and that document has no waitlist button, so the check fails instead of confirming the row. An add to cart button means it is live. A page that shows both, or neither, stays unverified.
 4. "will ship in {Month}" updates the month label. If that sentence is gone, the label becomes "Release date not announced".
 5. A datetime or calendar date that has passed removes the row unless the source published a new future date. If the source now shows a normal in-stock product, the row is marked live, the catalog price is updated when we have one, wishlisted hearts are copied onto that product, and a restock notification is written.
 6. The API hides rows whose last successful check is older than 36 hours, and any row that is not `upcoming`.
@@ -200,6 +200,7 @@ npm run db:migrate:remote    # production D1 — applies pending files in migrat
 | `0010_sync_availability.sql` | Rewrites `availability` / `restock_estimate` / `deal_score` from the same catalog JSON sources. OOS SKUs keep a restock estimate only when the source provides one; in-stock clears stale estimates. Unverified rows are left unchanged. Do **not** `db.exec` this from `ensureCatalog`. |
 | `0012_confirm_prices.sql` | Batched `UPDATE`s for SKUs whose sell price or compare-at changed after a fresh Sephora / Shopify / brand `products.json` check. Raises an understated percent when a real compare-at exists. Clears a percent when the source has no compare-at. Do **not** `db.exec` this from `ensureCatalog`. |
 | `0013_preorders.sql` | Pre-order table plus the coming soon rows verified on 25 September 2026. Do **not** `db.exec` this from `ensureCatalog`. |
+| `0015_preorder_checks.sql` | `preorders.last_checked_at` and `preorders.last_check_error` for failed re-checks. Does not change `last_verified_at`. Do **not** `db.exec` this from `ensureCatalog`. |
 
 `INSERT OR IGNORE` so re-applying is safe on an already-seeded database.
 

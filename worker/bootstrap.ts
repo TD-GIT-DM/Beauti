@@ -20,8 +20,9 @@ function executableSql(sql: string): string {
 
 /**
  * Ensure schema + base seed exist. Large aisle files (0004, 0006, 0007, 0008,
- * 0009, 0010, 0012), the pre-order seed (0013), and theme look columns
- * (0014) are intentionally NOT auto-applied via db.exec. Apply with wrangler:
+ * 0009, 0010, 0012), the pre-order seed (0013), theme look columns (0014),
+ * and pre-order check columns (0015) are intentionally NOT auto-applied via
+ * db.exec. Apply with wrangler:
  *   npm run db:migrate:local  |  npm run db:migrate:remote
  * If mac-ruby-woo is missing we no-op and keep serving the base catalog.
  */
