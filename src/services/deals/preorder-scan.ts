@@ -1,8 +1,9 @@
 /**
  * Re-check pre-order rows from Shopify product JSON, plus the product page
  * when a coming-soon tag is paired with stock or a ship month might be posted.
- * A failed fetch does not refresh last_verified_at. Rows older than 36 hours
- * drop off the API until a later check succeeds.
+ * A failed fetch does not refresh last_verified_at. It does record
+ * last_checked_at and last_check_error. Rows older than 36 hours drop off
+ * the API until a later check succeeds.
  */
 
 import { honestDealScore } from "../../lib/discount";
@@ -15,6 +16,9 @@ import {
   shopifyInStock,
   shopifyPreorderId,
   shopifySignal,
+  SHOPIFY_HTML_ACCEPT,
+  SHOPIFY_JSON_ACCEPT,
+  storefrontHtml,
   tagList,
   type PreorderEntry,
   type PreorderRow,
@@ -40,7 +44,11 @@ const SHOPS = [...new Set([...Object.values(BRAND_SHOPS), "https://www.makeupbym
 const SHOPS_PER_TICK = 3;
 const REVERIFY_LIMIT = 24;
 
-async function fetchText(url: string, referer: string): Promise<{ status: number; text: string | null }> {
+async function fetchText(
+  url: string,
+  referer: string,
+  accept: string,
+): Promise<{ status: number; text: string | null; contentType: string | null }> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8_000);
   try {
@@ -48,16 +56,16 @@ async function fetchText(url: string, referer: string): Promise<{ status: number
       method: "GET",
       headers: {
         "User-Agent": CATALOG_UA,
-        Accept: "application/json,text/html;q=0.9",
+        Accept: accept,
         "Accept-Language": "en-US,en;q=0.9",
         Referer: referer,
       },
       signal: ctrl.signal,
     });
     const text = await res.text();
-    return { status: res.status, text };
+    return { status: res.status, text, contentType: res.headers.get("content-type") };
   } catch {
-    return { status: 0, text: null };
+    return { status: 0, text: null, contentType: null };
   } finally {
     clearTimeout(timer);
   }
@@ -78,33 +86,47 @@ function jsUrl(productUrl: string): string | null {
   return `${clean}.js`;
 }
 
+function pageFailure(page: { status: number; text: string | null; contentType: string | null }): string {
+  if (page.status === 0) return "page_fetch_failed";
+  if (page.status < 200 || page.status >= 300) return `page_http_${page.status}`;
+  if (page.text && !storefrontHtml(page.text, page.contentType)) return "page_not_html";
+  return "page_not_loaded";
+}
+
 async function readProduct(productUrl: string, now: Date, wantPage: boolean): Promise<SourceReading> {
   const source = jsUrl(productUrl);
-  if (!source) return { ok: false };
-  const productRes = await fetchText(source, productUrl);
+  if (!source) return { ok: false, error: "bad_product_url" };
+  const productRes = await fetchText(source, productUrl, SHOPIFY_JSON_ACCEPT);
   if (productRes.status === 404 || productRes.status === 410) {
     return { ok: true, found: false, stillPending: false, nowLive: false };
   }
-  if (!productRes.text || productRes.status < 200 || productRes.status >= 300) return { ok: false };
+  if (productRes.status === 0) return { ok: false, error: "fetch_failed" };
+  if (!productRes.text || productRes.status < 200 || productRes.status >= 300) {
+    return { ok: false, error: `http_${productRes.status}` };
+  }
   let product: ShopifyReadInput | null = null;
   try {
     product = JSON.parse(productRes.text) as ShopifyReadInput;
   } catch {
-    return { ok: false };
+    return { ok: false, error: "product_json_parse" };
   }
   const tags = tagList(product.tags);
   const signal = shopifySignal(tags, shopifyInStock(product));
   const loadPage = wantPage || signal === "preorder" || signal === "coming_ambiguous";
   let pageHtml: string | null = null;
   let pageLoaded = false;
+  let pageError: string | null = null;
   if (loadPage) {
-    const page = await fetchText(productUrl, productUrl);
-    if (page.status >= 200 && page.status < 300 && page.text) {
-      pageHtml = page.text;
+    const page = await fetchText(productUrl, productUrl, SHOPIFY_HTML_ACCEPT);
+    const html = page.text ? storefrontHtml(page.text, page.contentType) : null;
+    if (html && page.status >= 200 && page.status < 300) {
+      pageHtml = html;
       pageLoaded = true;
+    } else {
+      pageError = pageFailure(page);
     }
   }
-  return interpretShopifyProduct(product, {
+  const reading = interpretShopifyProduct(product, {
     host: hostOf(productUrl),
     productUrl,
     sourceUrl: productUrl,
@@ -113,6 +135,10 @@ async function readProduct(productUrl: string, now: Date, wantPage: boolean): Pr
     pageLoaded,
     now,
   });
+  if (!reading.ok && reading.error === "page_not_loaded" && pageError) {
+    return { ok: false, error: pageError };
+  }
+  return reading;
 }
 
 async function loadRows(db: D1Database): Promise<PreorderEntry[]> {
@@ -132,7 +158,7 @@ async function saveEntry(db: D1Database, entry: PreorderEntry): Promise<void> {
        SET kind = ?, name = ?, brand = ?, description = ?, image_url = ?, product_url = ?, source_url = ?,
            price = ?, list_price = ?, announced_percent = ?, discount_confirmed = ?, currency = ?,
            starts_at = ?, ends_at = ?, date_precision = ?, date_label = ?, status = ?,
-           linked_product_id = ?, last_verified_at = ?, updated_at = ?
+           linked_product_id = ?, last_verified_at = ?, last_checked_at = ?, last_check_error = ?, updated_at = ?
        WHERE id = ?`,
     )
     .bind(
@@ -155,6 +181,8 @@ async function saveEntry(db: D1Database, entry: PreorderEntry): Promise<void> {
       entry.status,
       entry.linkedProductId,
       entry.lastVerifiedAt,
+      entry.lastCheckedAt,
+      entry.lastCheckError,
       entry.updatedAt,
       entry.id,
     )
@@ -168,8 +196,8 @@ async function insertEntry(db: D1Database, entry: PreorderEntry): Promise<void> 
          id, kind, name, brand, description, image_url, product_url, source_url,
          price, list_price, announced_percent, discount_confirmed, currency,
          starts_at, ends_at, date_precision, date_label, status, linked_product_id,
-         last_verified_at, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         last_verified_at, last_checked_at, last_check_error, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       entry.id,
@@ -192,6 +220,8 @@ async function insertEntry(db: D1Database, entry: PreorderEntry): Promise<void> 
       entry.status,
       entry.linkedProductId,
       entry.lastVerifiedAt,
+      entry.lastCheckedAt,
+      entry.lastCheckError,
       entry.createdAt,
       entry.updatedAt,
     )
@@ -331,8 +361,12 @@ export async function refreshPreorders(env: Bindings, now = new Date()): Promise
     let reading: SourceReading;
     try {
       reading = await readProduct(current.productUrl, now, current.datePrecision === "month");
-    } catch {
-      reading = { ok: false };
+    } catch (err) {
+      const detail = String(err).replace(/\s+/g, " ").trim().slice(0, 160);
+      reading = { ok: false, error: detail ? `fetch_threw: ${detail}` : "fetch_threw" };
+    }
+    if (!reading.ok) {
+      console.log(JSON.stringify({ event: "preorder_check_fail", id: current.id, error: reading.error ?? "unverified" }));
     }
     const next = applyReading(current, reading, nowIso);
     if (next.status === "live" && current.status !== "live") {
@@ -353,6 +387,8 @@ export async function refreshPreorders(env: Bindings, now = new Date()): Promise
     if (
       next.status !== current.status ||
       next.lastVerifiedAt !== current.lastVerifiedAt ||
+      next.lastCheckedAt !== current.lastCheckedAt ||
+      next.lastCheckError !== current.lastCheckError ||
       next.price !== current.price ||
       next.dateLabel !== current.dateLabel ||
       next.startsAt !== current.startsAt
@@ -376,7 +412,7 @@ export async function refreshPreorders(env: Bindings, now = new Date()): Promise
     } catch {
       continue;
     }
-    const list = await fetchText(`${origin}/products.json?limit=250`, `${origin}/`);
+    const list = await fetchText(`${origin}/products.json?limit=250`, `${origin}/`, SHOPIFY_JSON_ACCEPT);
     if (list.status < 200 || list.status >= 300 || !list.text) continue;
     let products: ShopifyReadInput[] = [];
     try {
@@ -398,9 +434,10 @@ export async function refreshPreorders(env: Bindings, now = new Date()): Promise
       let pageHtml: string | null = null;
       let pageLoaded = false;
       if (signal === "preorder" || signal === "coming_ambiguous") {
-        const page = await fetchText(productUrl, productUrl);
-        if (page.status >= 200 && page.status < 300 && page.text) {
-          pageHtml = page.text;
+        const page = await fetchText(productUrl, productUrl, SHOPIFY_HTML_ACCEPT);
+        const html = page.status >= 200 && page.status < 300 && page.text ? storefrontHtml(page.text, page.contentType) : null;
+        if (html) {
+          pageHtml = html;
           pageLoaded = true;
         }
       }
