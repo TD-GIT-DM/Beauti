@@ -1,13 +1,28 @@
+import { isNativeRuntime } from "./native.ts";
+import {
+  activeFontHref,
+  fontById,
+  normalizeBackground,
+  normalizeFont,
+  SPARKLE_BASE,
+  type BackgroundId,
+  type FontId,
+} from "./look.ts";
+
 export const DEFAULT_THEME = {
   main: "#d4af37",
   secondary: "#070707",
-} as const;
+  background: "black" as BackgroundId,
+  font: "classic" as FontId,
+};
 
 export const THEME_KEY = "beauti_theme";
 
 export interface ThemeColors {
   main: string;
   secondary: string;
+  background?: BackgroundId;
+  font?: FontId;
 }
 
 export interface HslColor {
@@ -243,12 +258,103 @@ export interface ThemeTokens {
   "--danger": string;
   "--ok": string;
   "--shadow": string;
+  "--spark-1-rgb": string;
+  "--spark-2-rgb": string;
+  "--spark-3-rgb": string;
+  "--spark-hot-rgb": string;
+  "--spark-glow-rgb": string;
   "color-scheme": "light" | "dark";
+}
+
+function lerpHue(from: number, to: number, amount: number): number {
+  const delta = ((((to - from) % 360) + 540) % 360) - 180;
+  return (from + delta * amount + 360) % 360;
+}
+
+function rgbChannels(hex: string): string {
+  const { r, g, b } = hexToRgb(hex);
+  return `${r} ${g} ${b}`;
+}
+
+/**
+ * Page field color. Black Sparkle keeps the secondary slider as the background
+ * (the current vault). Pink and Teal keep their sparkle color, and the slider
+ * tints that field so contrast can follow both.
+ */
+export function canvasColor(background: BackgroundId, secondary: string): string {
+  const sec = normalizeHex(secondary) ?? DEFAULT_THEME.secondary;
+  if (background === "black") return sec;
+  const base = hexToHsl(SPARKLE_BASE[background]);
+  const user = hexToHsl(sec);
+  const lightVault = user.l >= 0.62;
+  const l = lightVault
+    ? clamp01(base.l * 0.22 + user.l * 0.78)
+    : clamp01(base.l * 0.86 + user.l * 0.14);
+  const pull = user.s > 0.12 ? 0.16 : 0;
+  const h = lerpHue(base.h, user.h, pull);
+  const s = lightVault
+    ? clamp01(Math.max(0.16, base.s * 0.58 + user.s * 0.12))
+    : clamp01(Math.max(0.26, base.s * 0.92 + user.s * 0.04));
+  return hslToHex({ h, s, l });
+}
+
+function sparkChannels(
+  background: BackgroundId,
+  canvas: string,
+  main: string,
+  ink: string,
+  bright: string,
+): { one: string; two: string; three: string; hot: string; glow: string } {
+  if (background === "black") {
+    const light = relativeLuminance(canvas) > 0.45;
+    return {
+      one: rgbChannels(bright),
+      two: rgbChannels(ink),
+      three: rgbChannels(main),
+      hot: rgbChannels(light ? "#6a6156" : "#fff4dc"),
+      glow: rgbChannels(main),
+    };
+  }
+  const light = relativeLuminance(canvas) > 0.4;
+  if (background === "pink") {
+    return light
+      ? {
+          one: rgbChannels("#a33d6e"),
+          two: rgbChannels("#6e2448"),
+          three: rgbChannels("#d47aa0"),
+          hot: rgbChannels("#ffffff"),
+          glow: rgbChannels("#e7a0c0"),
+        }
+      : {
+          one: rgbChannels("#ffd0e4"),
+          two: rgbChannels("#fff6fb"),
+          three: rgbChannels("#f2a3c4"),
+          hot: rgbChannels("#ffffff"),
+          glow: rgbChannels("#e86aa6"),
+        };
+  }
+  return light
+    ? {
+        one: rgbChannels("#1c7c7a"),
+        two: rgbChannels("#0d4a4c"),
+        three: rgbChannels("#8fd4cf"),
+        hot: rgbChannels("#ffffff"),
+        glow: rgbChannels("#7dccc6"),
+      }
+    : {
+        one: rgbChannels("#c9fff6"),
+        two: rgbChannels("#f3fffd"),
+        three: rgbChannels("#7ee0d8"),
+        hot: rgbChannels("#ffffff"),
+        glow: rgbChannels("#2bbbad"),
+      };
 }
 
 export function themeTokens(theme: ThemeColors): ThemeTokens {
   const main = normalizeHex(theme.main) ?? DEFAULT_THEME.main;
-  const secondary = normalizeHex(theme.secondary) ?? DEFAULT_THEME.secondary;
+  const secondaryInput = normalizeHex(theme.secondary) ?? DEFAULT_THEME.secondary;
+  const background = normalizeBackground(theme.background);
+  const secondary = canvasColor(background, secondaryInput);
   const gold = hexToRgb(main);
   const goldHsl = rgbToHsl(gold.r, gold.g, gold.b);
   const bg = hexToRgb(secondary);
@@ -280,6 +386,7 @@ export function themeTokens(theme: ThemeColors): ThemeTokens {
   const panelBg = readableSurface(card, ink, toward, lightSurface ? 0.02 : 0.03);
   const danger = ensureContrast("#c47a7a", secondary, AA_CONTRAST, ink);
   const ok = ensureContrast("#8aa37a", secondary, AA_CONTRAST, ink);
+  const sparks = sparkChannels(background, secondary, main, ink, bright);
 
   return {
     "--bg": secondary,
@@ -307,6 +414,11 @@ export function themeTokens(theme: ThemeColors): ThemeTokens {
     "--danger": danger,
     "--ok": ok,
     "--shadow": lightSurface ? "0 24px 80px rgba(0, 0, 0, 0.18)" : "0 24px 80px rgba(0, 0, 0, 0.55)",
+    "--spark-1-rgb": sparks.one,
+    "--spark-2-rgb": sparks.two,
+    "--spark-3-rgb": sparks.three,
+    "--spark-hot-rgb": sparks.hot,
+    "--spark-glow-rgb": sparks.glow,
     "color-scheme": lightSurface ? "light" : "dark",
   };
 }
@@ -318,26 +430,81 @@ export function readLocalTheme(): ThemeColors {
     const parsed = JSON.parse(raw) as Partial<ThemeColors>;
     const main = normalizeHex(parsed.main ?? "") ?? DEFAULT_THEME.main;
     const secondary = normalizeHex(parsed.secondary ?? "") ?? DEFAULT_THEME.secondary;
-    return { main, secondary };
+    return {
+      main,
+      secondary,
+      background: normalizeBackground(parsed.background),
+      font: normalizeFont(parsed.font),
+    };
   } catch {
     return { ...DEFAULT_THEME };
   }
 }
 
 export function writeLocalTheme(theme: ThemeColors): void {
-  localStorage.setItem(THEME_KEY, JSON.stringify(theme));
+  const stored: ThemeColors = {
+    main: normalizeHex(theme.main) ?? DEFAULT_THEME.main,
+    secondary: normalizeHex(theme.secondary) ?? DEFAULT_THEME.secondary,
+    background: normalizeBackground(theme.background),
+    font: normalizeFont(theme.font),
+  };
+  localStorage.setItem(THEME_KEY, JSON.stringify(stored));
+}
+
+function ensureFontStylesheet(font: FontId): void {
+  const href = activeFontHref(font);
+  const existing = document.getElementById("beauti-font-active");
+  if (!href) {
+    existing?.remove();
+    return;
+  }
+  let link = existing as HTMLLinkElement | null;
+  if (!link) {
+    link = document.createElement("link");
+    link.id = "beauti-font-active";
+    link.rel = "stylesheet";
+    link.crossOrigin = "anonymous";
+    document.head.appendChild(link);
+  }
+  if (link.getAttribute("href") !== href) link.setAttribute("href", href);
+}
+
+function syncNativeChrome(color: string, scheme: "light" | "dark"): void {
+  if (!isNativeRuntime()) return;
+  void import("@capacitor/status-bar")
+    .then(({ StatusBar, Style }) =>
+      Promise.all([
+        StatusBar.setBackgroundColor({ color }),
+        StatusBar.setStyle({ style: scheme === "light" ? Style.Dark : Style.Light }),
+      ]),
+    )
+    .catch(() => undefined);
 }
 
 export function applyTheme(theme: ThemeColors): void {
   if (typeof document === "undefined") return;
   const tokens = themeTokens(theme);
+  const font = fontById(theme.font);
+  const background = normalizeBackground(theme.background);
   const root = document.documentElement;
   for (const [key, value] of Object.entries(tokens)) {
     root.style.setProperty(key, value);
   }
+  root.dataset.bg = background;
+  root.dataset.font = font.id;
+  root.dataset.scheme = tokens["color-scheme"];
+  root.style.setProperty("--font-sans", font.sans);
+  root.style.setProperty("--font-serif", font.serif);
+  root.style.setProperty("--body-scale", String(font.bodyScale));
+  root.style.setProperty("--heading-scale", String(font.headingScale));
+  root.style.backgroundColor = tokens["--bg"];
+  root.style.color = tokens["--ink"];
   document.body.style.backgroundColor = tokens["--bg"];
+  document.body.style.color = tokens["--ink"];
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute("content", tokens["--bg"]);
+  ensureFontStylesheet(font.id);
+  syncNativeChrome(tokens["--bg"], tokens["color-scheme"]);
 }
 
 export function applyStoredTheme(): ThemeColors {

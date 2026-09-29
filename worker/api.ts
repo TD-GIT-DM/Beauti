@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { isBackgroundId, isFontId } from "../src/lib/look";
 import { omitStoredTags } from "../src/lib/public-product";
 import { filterCatalog, parseOptionalNumber, parseSort, relevanceScore } from "../src/lib/search";
 import { scanDeals } from "../src/services/deals";
@@ -352,7 +353,14 @@ api.post("/api/auth/signup", async (c) => {
 
   const sessionId = await createSession(c.env.DB, id);
   const wishlist = await mergeGuestWishlist(c.env.DB, id, deviceId);
-  const user = { id, username, themeMain: null, themeSecondary: null };
+  const user = {
+    id,
+    username,
+    themeMain: null,
+    themeSecondary: null,
+    themeBackground: null,
+    themeFont: null,
+  };
   return json({ user, wishlist, deviceId }, {}, { deviceId, sessionId, request: c.req.raw });
 });
 
@@ -380,6 +388,8 @@ api.post("/api/auth/signin", async (c) => {
     username: row.username ?? username,
     themeMain: row.theme_main,
     themeSecondary: row.theme_secondary,
+    themeBackground: row.theme_background,
+    themeFont: row.theme_font,
   };
   return json({ user, wishlist, deviceId }, {}, { deviceId, sessionId, request: c.req.raw });
 });
@@ -393,33 +403,67 @@ api.post("/api/auth/signout", async (c) => {
 api.get("/api/settings", async (c) => {
   const { deviceId, user } = await actor(c);
   if (!user) return json({ error: "Sign in to sync settings." }, { status: 401 }, { deviceId });
-  return json({ themeMain: user.themeMain, themeSecondary: user.themeSecondary, username: user.username }, {}, { deviceId });
+  return json(
+    {
+      themeMain: user.themeMain,
+      themeSecondary: user.themeSecondary,
+      themeBackground: user.themeBackground,
+      themeFont: user.themeFont,
+      username: user.username,
+    },
+    {},
+    { deviceId },
+  );
 });
 
 api.patch("/api/settings", async (c) => {
   const { deviceId, user } = await actor(c);
   if (!user) return json({ error: "Sign in to sync settings." }, { status: 401 }, { deviceId });
-  let body: { themeMain?: string; themeSecondary?: string };
+  let body: { themeMain?: string; themeSecondary?: string; themeBackground?: string; themeFont?: string };
   try {
-    body = (await c.req.json()) as { themeMain?: string; themeSecondary?: string };
+    body = (await c.req.json()) as {
+      themeMain?: string;
+      themeSecondary?: string;
+      themeBackground?: string;
+      themeFont?: string;
+    };
   } catch {
     return json({ error: "Invalid JSON" }, { status: 400 }, { deviceId });
   }
   const themeMain = body.themeMain?.trim();
   const themeSecondary = body.themeSecondary?.trim();
+  const themeBackground = body.themeBackground?.trim();
+  const themeFont = body.themeFont?.trim();
   if (themeMain && !isHexColor(themeMain)) {
     return json({ error: "Main color must be a 6-digit hex value." }, { status: 400 }, { deviceId });
   }
   if (themeSecondary && !isHexColor(themeSecondary)) {
     return json({ error: "Secondary color must be a 6-digit hex value." }, { status: 400 }, { deviceId });
   }
+  if (themeBackground && !isBackgroundId(themeBackground)) {
+    return json({ error: "Background must be black, pink, or teal." }, { status: 400 }, { deviceId });
+  }
+  if (themeFont && !isFontId(themeFont)) {
+    return json({ error: "Font is not one of the site faces." }, { status: 400 }, { deviceId });
+  }
   const nextMain = themeMain ?? user.themeMain;
   const nextSecondary = themeSecondary ?? user.themeSecondary;
-  await c.env.DB.prepare(`UPDATE users SET theme_main = ?, theme_secondary = ? WHERE id = ?`)
-    .bind(nextMain, nextSecondary, user.id)
+  const nextBackground = themeBackground ?? user.themeBackground;
+  const nextFont = themeFont ?? user.themeFont;
+  await c.env.DB.prepare(
+    `UPDATE users SET theme_main = ?, theme_secondary = ?, theme_background = ?, theme_font = ? WHERE id = ?`,
+  )
+    .bind(nextMain, nextSecondary, nextBackground, nextFont, user.id)
     .run();
   return json(
-    { ok: true, themeMain: nextMain, themeSecondary: nextSecondary, username: user.username },
+    {
+      ok: true,
+      themeMain: nextMain,
+      themeSecondary: nextSecondary,
+      themeBackground: nextBackground,
+      themeFont: nextFont,
+      username: user.username,
+    },
     {},
     { deviceId },
   );
