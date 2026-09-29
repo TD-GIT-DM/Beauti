@@ -51,6 +51,11 @@ export interface ScanOptions {
   /** Force a restock, price drop, or mixed cycle — useful for demos. Cron leaves this unset. */
   force?: "restock" | "drop" | "cycle";
   now?: Date;
+  /**
+   * `preorders` and `catalog` are separate cron invocations.
+   * `both` checks pre-orders first, then catalog, on one shared subrequest budget.
+   */
+  job?: "preorders" | "catalog" | "both";
 }
 
 export interface ScanSummary {
@@ -59,11 +64,13 @@ export interface ScanSummary {
   restocks: string[];
   priceDrops: string[];
   notificationsCreated: number;
-  /** `catalog` = production JSON sync; `demo` = mock force events. */
-  mode?: "catalog" | "demo";
+  /** `catalog` = production JSON sync; `preorders` = pre-order pass; `demo` = mock force events. */
+  mode?: "catalog" | "preorders" | "demo";
   becameOutOfStock?: string[];
   fetched?: number;
   unverified?: number;
+  /** External subrequests used, including redirect hops. */
+  subrequests?: number;
   preordersChecked?: number;
   preordersAdded?: number;
   preordersLive?: number;

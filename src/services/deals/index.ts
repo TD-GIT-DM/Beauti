@@ -1,14 +1,19 @@
 import { refreshPreorders } from "./preorder-scan";
-import { quoteCatalogProduct, mapPool, snapshotFromQuote } from "./catalog-sources";
+import { quoteCatalogProduct, snapshotFromQuote } from "./catalog-sources";
+import {
+  advanceCatalogCursor,
+  HostScheduler,
+  kvHostCooldown,
+  MIN_CATALOG_REMAINING,
+  planCatalogIds,
+  SubrequestBudget,
+  type OutboundFetch,
+} from "./fetch-budget";
 import { applyForcedEvents, MockRetailerFeed } from "./mock-retailer";
 import type { Availability, CatalogProduct, PromoCode, ScanOptions, ScanSummary } from "./types";
 
 export type { Availability, AffiliateClient, CatalogProduct, DealProvider, DealSnapshot, PromoCode, ScanOptions, ScanSummary } from "./types";
 export { MockRetailerFeed } from "./mock-retailer";
-
-/** Products refreshed per cron tick (15 min). Full catalog rotates every few hours. */
-const CATALOG_BATCH = 48;
-const FETCH_CONCURRENCY = 6;
 
 interface Bindings {
   DB: D1Database;
@@ -189,67 +194,77 @@ function persistSnapshots(
   return { stmts, restocks, priceDrops, becameOutOfStock, events };
 }
 
-async function pickCatalogBatch(env: Bindings, catalog: CatalogProduct[]): Promise<CatalogProduct[]> {
-  if (catalog.length <= CATALOG_BATCH) return catalog;
-
+async function priorityIds(env: Bindings): Promise<string[]> {
   const wishlistedOos = await env.DB.prepare(
     `SELECT DISTINCT p.id
      FROM wishlist w
      JOIN products p ON p.id = w.product_id
      WHERE p.availability = 'out_of_stock'`,
   ).all<{ id: string }>();
-  const priorityIds = new Set((wishlistedOos.results ?? []).map((r) => r.id));
-  const priority = catalog.filter((p) => priorityIds.has(p.id));
-
-  const sorted = [...catalog].sort((a, b) => a.id.localeCompare(b.id));
-  const rawCursor = await env.DEALS_CACHE.get("deals:avail-cursor");
-  const cursor = Number(rawCursor ?? "0") || 0;
-  const rotated: CatalogProduct[] = [];
-  for (let i = 0; i < sorted.length && rotated.length < CATALOG_BATCH; i++) {
-    const item = sorted[(cursor + i) % sorted.length];
-    if (!priorityIds.has(item.id)) rotated.push(item);
-  }
-  const nextCursor = (cursor + rotated.length) % Math.max(sorted.length, 1);
-  await env.DEALS_CACHE.put("deals:avail-cursor", String(nextCursor));
-
-  const combined: CatalogProduct[] = [];
-  const seen = new Set<string>();
-  for (const p of [...priority, ...rotated]) {
-    if (seen.has(p.id)) continue;
-    seen.add(p.id);
-    combined.push(p);
-    if (combined.length >= CATALOG_BATCH) break;
-  }
-  return combined;
+  return (wishlistedOos.results ?? []).map((row) => row.id);
 }
 
-async function scanCatalog(env: Bindings, catalog: CatalogProduct[], nowIso: string): Promise<ScanSummary> {
-  const batch = await pickCatalogBatch(env, catalog);
+async function scanCatalog(
+  env: Bindings,
+  catalog: CatalogProduct[],
+  nowIso: string,
+  outbound: OutboundFetch,
+): Promise<ScanSummary> {
+  const sorted = [...catalog].sort((a, b) => a.id.localeCompare(b.id));
+  const byId = new Map(sorted.map((product) => [product.id, product]));
+  const priority = await priorityIds(env);
+  const rawCursor = await env.DEALS_CACHE.get("deals:avail-cursor");
+  const cursor = Number(rawCursor ?? "0") || 0;
+  const planned = planCatalogIds(
+    sorted.map((product) => product.id),
+    cursor,
+    priority,
+  );
+
   const caches = {
     sephoraSearch: new Map<string, unknown[]>(),
     shopifyJs: new Map<string, Record<string, unknown> | null>(),
     shopifyShops: new Map<string, Record<string, unknown>[]>(),
   };
 
-  const quotes = await mapPool(batch, FETCH_CONCURRENCY, async (product) => {
+  const attempted: CatalogProduct[] = [];
+  const quotes: Array<Awaited<ReturnType<typeof quoteCatalogProduct>>> = [];
+  for (const id of planned) {
+    if (outbound.budget.remaining() < MIN_CATALOG_REMAINING) {
+      console.log(
+        JSON.stringify({
+          event: "catalog_budget_stop",
+          attempted: attempted.length,
+          planned: planned.length,
+          subrequests: outbound.budget.used,
+        }),
+      );
+      break;
+    }
+    const product = byId.get(id);
+    if (!product) continue;
+    attempted.push(product);
     try {
-      return await quoteCatalogProduct(product, caches);
+      quotes.push(await quoteCatalogProduct(product, caches, outbound));
     } catch (err) {
       console.log(JSON.stringify({ event: "catalog_quote_fail", id: product.id, err: String(err) }));
-      return null;
+      quotes.push(null);
     }
-  });
+  }
+
+  const nextCursor = advanceCatalogCursor(sorted.length, cursor, attempted.map((product) => product.id), new Set(priority));
+  await env.DEALS_CACHE.put("deals:avail-cursor", String(nextCursor));
 
   const snapshots = [];
   let unverified = 0;
-  for (let i = 0; i < batch.length; i++) {
+  for (let i = 0; i < attempted.length; i++) {
     const quote = quotes[i];
     const priceVerified = quote?.price != null && quote.price > 0 && quote.listPrice != null && quote.listPrice > 0;
     if (!quote || (!quote.explicit && !priceVerified)) {
       unverified += 1;
       continue;
     }
-    snapshots.push(snapshotFromQuote(batch[i], quote));
+    snapshots.push(snapshotFromQuote(attempted[i], quote));
   }
 
   const { stmts, restocks, priceDrops, becameOutOfStock, events } = persistSnapshots(
@@ -269,7 +284,7 @@ async function scanCatalog(env: Bindings, catalog: CatalogProduct[], nowIso: str
     notificationsCreated,
     mode: "catalog",
     becameOutOfStock,
-    fetched: batch.length,
+    fetched: attempted.length,
     unverified,
   };
 }
@@ -299,14 +314,33 @@ async function scanDemo(
   };
 }
 
+function emptySummary(nowIso: string, mode: ScanSummary["mode"]): ScanSummary {
+  return {
+    scannedAt: nowIso,
+    updated: 0,
+    restocks: [],
+    priceDrops: [],
+    notificationsCreated: 0,
+    mode,
+    fetched: 0,
+    unverified: 0,
+  };
+}
+
+async function rememberScan(env: Bindings, scanIndex: number, summary: ScanSummary): Promise<void> {
+  await env.DEALS_CACHE.put("deals:scan-index", String(scanIndex));
+  await env.DEALS_CACHE.put("deals:last-scan", JSON.stringify(summary), { expirationTtl: 60 * 60 * 24 * 7 });
+}
+
 /**
  * Periodic deal scan.
  *
- * Cron (no `force`) refreshes availability + price from Sephora catalog JSON,
- * Shopify product JSON, and brand products.json. Compare-at prices raise the
- * stored discount. A quote with no compare-at stores the sell price and no
- * percent off. Manual Notifications → Run deal scan still applies a demo
- * restock / drop and does not call retailer APIs.
+ * Pre-order checks (`job: "preorders"`) and catalog quotes (`job: "catalog"`)
+ * run on separate cron triggers. Each stays within the outbound subrequest
+ * budget. `job: "both"` checks pre-orders first, then spends what remains on
+ * the catalog. Compare-at prices raise the stored discount. A quote with no
+ * compare-at stores the sell price and no percent off. Manual Run deal scan
+ * still applies a demo restock / drop and does not call retailer APIs.
  */
 export async function scanDeals(env: Bindings, options: ScanOptions = {}): Promise<ScanSummary> {
   const now = options.now ?? new Date();
@@ -315,27 +349,51 @@ export async function scanDeals(env: Bindings, options: ScanOptions = {}): Promi
   const counterRaw = await env.DEALS_CACHE.get("deals:scan-index");
   const scanIndex = Number(counterRaw ?? "0") + 1;
 
-  const catalog = await loadCatalog(env.DB);
-  const summary = options.force
-    ? await scanDemo(env, catalog, scanIndex, options.force, nowIso)
-    : await scanCatalog(env, catalog, nowIso);
+  if (options.force) {
+    const catalog = await loadCatalog(env.DB);
+    const summary = await scanDemo(env, catalog, scanIndex, options.force, nowIso);
+    await rememberScan(env, scanIndex, summary);
+    return summary;
+  }
 
-  if (!options.force) {
+  const job = options.job ?? "both";
+  const outbound: OutboundFetch = {
+    budget: new SubrequestBudget(),
+    hosts: new HostScheduler({ store: kvHostCooldown(env.DEALS_CACHE) }),
+  };
+
+  let summary = emptySummary(nowIso, job === "preorders" ? "preorders" : "catalog");
+
+  if (job === "preorders" || job === "both") {
     try {
-      const preorders = await refreshPreorders(env, now);
+      const preorders = await refreshPreorders(env, now, outbound);
       summary.preordersChecked = preorders.checked;
       summary.preordersAdded = preorders.added;
       summary.preordersLive = preorders.live;
       summary.preordersRemoved = preorders.removed;
       summary.notificationsCreated += preorders.notificationsCreated;
+      if (job === "preorders") summary.mode = "preorders";
     } catch (err) {
       console.log(JSON.stringify({ event: "preorder_refresh_fail", err: String(err) }));
     }
   }
 
-  await env.DEALS_CACHE.put("deals:scan-index", String(scanIndex));
-  await env.DEALS_CACHE.put("deals:last-scan", JSON.stringify(summary), { expirationTtl: 60 * 60 * 24 * 7 });
+  if (job === "catalog" || job === "both") {
+    const catalog = await loadCatalog(env.DB);
+    const catalogSummary = await scanCatalog(env, catalog, nowIso, outbound);
+    summary = {
+      ...catalogSummary,
+      preordersChecked: summary.preordersChecked,
+      preordersAdded: summary.preordersAdded,
+      preordersLive: summary.preordersLive,
+      preordersRemoved: summary.preordersRemoved,
+      notificationsCreated: summary.notificationsCreated + catalogSummary.notificationsCreated,
+      mode: "catalog",
+    };
+  }
 
+  summary.subrequests = outbound.budget.used;
+  await rememberScan(env, scanIndex, summary);
   return summary;
 }
 

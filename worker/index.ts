@@ -15,8 +15,8 @@ export default {
     }
     return new Response(null, { status: 404 });
   },
-  async scheduled(_controller, env, ctx) {
+  async scheduled(controller, env, ctx) {
     await ensureCatalog(env.DB);
-    await handleScheduled(env, ctx);
+    await handleScheduled(env, ctx, controller.cron);
   },
 } satisfies ExportedHandler<Env>;

@@ -15,6 +15,7 @@ import {
   type VerifiedPrice,
 } from "../../lib/catalog-price";
 import { honestDealScore } from "../../lib/discount";
+import { budgetedFetch, type OutboundFetch } from "./fetch-budget";
 import type { Availability, CatalogProduct, DealSnapshot } from "./types";
 
 export { pricesFromSephoraProduct, pricesFromShopify, chooseVerifiedPrice };
@@ -113,9 +114,37 @@ function jsonHeaders(referer: string): HeadersInit {
 
 export async function fetchJson(
   url: string,
-  opts: { timeoutMs?: number; referer?: string } = {},
+  opts: { timeoutMs?: number; referer?: string; outbound?: OutboundFetch } = {},
 ): Promise<unknown | null> {
   const timeoutMs = opts.timeoutMs ?? 8_000;
+  if (opts.outbound) {
+    const result = await budgetedFetch({
+      url,
+      budget: opts.outbound.budget,
+      hosts: opts.outbound.hosts,
+      timeoutMs,
+      init: {
+        method: "GET",
+        headers: jsonHeaders(opts.referer ?? "https://www.sephora.com/"),
+      },
+    });
+    if (result.error || result.status < 200 || result.status >= 300 || !result.text) {
+      if (
+        result.error &&
+        (result.error === "subrequest_budget_exhausted" ||
+          result.error.startsWith("fetch_failed") ||
+          result.error.startsWith("http_429"))
+      ) {
+        console.log(JSON.stringify({ event: "catalog_fetch_fail", url, error: result.error }));
+      }
+      return null;
+    }
+    try {
+      return JSON.parse(result.text) as unknown;
+    } catch {
+      return null;
+    }
+  }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -359,11 +388,16 @@ export function matchShopifyProduct(
   return matchShopifyProducts(name, brand, products)[0] ?? null;
 }
 
-export async function sephoraSearch(brand: string, name: string, cache: Map<string, unknown[]>): Promise<unknown[]> {
+export async function sephoraSearch(
+  brand: string,
+  name: string,
+  cache: Map<string, unknown[]>,
+  outbound?: OutboundFetch,
+): Promise<unknown[]> {
   const q = `${brand} ${name}`.trim();
   if (cache.has(q)) return cache.get(q) ?? [];
   const url = SEPHORA_SEARCH.replace("{q}", encodeURIComponent(q));
-  const data = (await fetchJson(url)) as { products?: unknown[] } | null;
+  const data = (await fetchJson(url, { outbound })) as { products?: unknown[] } | null;
   const products = Array.isArray(data?.products) ? data.products : [];
   cache.set(q, products);
   return products;
@@ -378,11 +412,15 @@ export function findSephoraById(products: unknown[], productId: string): Record<
   return null;
 }
 
-export async function sephoraProductJson(productId: string, skuId?: string | null): Promise<Record<string, unknown> | null> {
+export async function sephoraProductJson(
+  productId: string,
+  skuId?: string | null,
+  outbound?: OutboundFetch,
+): Promise<Record<string, unknown> | null> {
   const qs = new URLSearchParams({ countryCode: "US", loc: "en-US" });
   if (skuId) qs.set("preferedSku", skuId);
   const url = `https://www.sephora.com/api/v2/catalog/products/${productId}?${qs.toString()}`;
-  const data = await fetchJson(url, { timeoutMs: 4_000 });
+  const data = await fetchJson(url, { timeoutMs: 4_000, outbound });
   if (data && typeof data === "object") {
     const rec = data as Record<string, unknown>;
     if (rec.currentSku || rec.productId || rec.regularChildSkus) return rec;
@@ -394,11 +432,13 @@ export async function sephoraProductJson(productId: string, skuId?: string | nul
 export async function loadShopifyShopProducts(
   origin: string,
   cache: Map<string, Record<string, unknown>[]>,
+  outbound?: OutboundFetch,
 ): Promise<Record<string, unknown>[]> {
   if (cache.has(origin)) return cache.get(origin) ?? [];
   const data = (await fetchJson(`${origin}/products.json?limit=250`, {
     timeoutMs: 10_000,
     referer: `${origin}/`,
+    outbound,
   })) as { products?: Record<string, unknown>[] } | null;
   const products = Array.isArray(data?.products) ? data.products : [];
   cache.set(origin, products);
@@ -414,6 +454,7 @@ export async function quoteCatalogProduct(
     sephoraProductJsonFails?: number;
     skipSephoraProductJson?: boolean;
   },
+  outbound?: OutboundFetch,
 ): Promise<CatalogQuote | null> {
   const url = product.productUrl ?? "";
   const priceQuotes: VerifiedPrice[] = [];
@@ -424,7 +465,7 @@ export async function quoteCatalogProduct(
   if (jsUrl) {
     let data = caches.shopifyJs.get(jsUrl);
     if (data === undefined) {
-      data = ((await fetchJson(jsUrl, { referer: url, timeoutMs: 8_000 })) as Record<string, unknown> | null) ?? null;
+      data = ((await fetchJson(jsUrl, { referer: url, timeoutMs: 8_000, outbound })) as Record<string, unknown> | null) ?? null;
       caches.shopifyJs.set(jsUrl, data);
     }
     const jsStock = stockFromShopify(data, product.name);
@@ -441,16 +482,16 @@ export async function quoteCatalogProduct(
 
   const pid = sephoraProductId(url);
   if (pid || /sephora\.com/i.test(url)) {
-    const hits = await sephoraSearch(product.brand, product.name, caches.sephoraSearch);
+    const hits = await sephoraSearch(product.brand, product.name, caches.sephoraSearch, outbound);
     let prod = pid ? findSephoraById(hits, pid) : null;
     if (!prod && pid) {
-      const hits2 = await sephoraSearch("Sephora", pid, caches.sephoraSearch);
+      const hits2 = await sephoraSearch("Sephora", pid, caches.sephoraSearch, outbound);
       prod = findSephoraById(hits2, pid);
     }
     const skuId = prod ? String(((prod.currentSku as Record<string, unknown> | undefined)?.skuId as string) ?? "") : "";
     let detailed: Record<string, unknown> | null = null;
     if (pid && !caches.skipSephoraProductJson) {
-      detailed = await sephoraProductJson(pid, skuId || null);
+      detailed = await sephoraProductJson(pid, skuId || null, outbound);
       if (!detailed) {
         caches.sephoraProductJsonFails = (caches.sephoraProductJsonFails ?? 0) + 1;
         if ((caches.sephoraProductJsonFails ?? 0) >= 3) caches.skipSephoraProductJson = true;
@@ -470,7 +511,7 @@ export async function quoteCatalogProduct(
 
   const origin = brandShop(product.brand);
   if (origin) {
-    const shopProducts = await loadShopifyShopProducts(origin, caches.shopifyShops);
+    const shopProducts = await loadShopifyShopProducts(origin, caches.shopifyShops, outbound);
     const handle = SHOPIFY_HANDLE_RE.exec(url)?.[1] ?? "";
     const matches = matchShopifyProducts(product.name, product.brand, shopProducts, handle);
     const best = matches[0];

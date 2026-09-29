@@ -7,6 +7,8 @@ import {
   entryFromReading,
   entryFromRow,
   extractShipWindow,
+  keepImage,
+  preserveBrand,
   formatCountdown,
   interpretShopifyProduct,
   isListed,
@@ -484,4 +486,100 @@ test("preorder check columns are a wrangler migration and are not exec'd from en
   assert.match(scan, /SHOPIFY_HTML_ACCEPT/);
   assert.match(scan, /preorder_check_fail/);
   assert.match(scan, /last_check_error/);
+  assert.match(scan, /COALESCE\(\?, image_url\)/);
+  assert.doesNotMatch(boot, /0016_preorder_brand\.sql/);
+  assert.match(boot, /0016/);
+  const brandSql = readFileSync(new URL("../../migrations/0016_preorder_brand.sql", import.meta.url), "utf8");
+  const brandStatements = brandSql
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n");
+  assert.match(brandStatements, /SET brand = 'Fenty Hair'/);
+  assert.doesNotMatch(brandStatements, /image_url/i);
+  assert.doesNotMatch(brandStatements, /last_verified_at/i);
+  assert.doesNotMatch(brandStatements, /db\.exec/);
+});
+
+const FENTY_ID =
+  "shopify:fentybeauty.com:the-bounce-besties-mini-leave-in-conditioner-spray-full-size-curl-defining-cream";
+
+test("a rate limit does not remove a row or refresh last_verified_at", () => {
+  const checkedAt = "2026-09-29T16:00:00.000Z";
+  const next = applyReading(
+    entry({
+      id: FENTY_ID,
+      brand: "Fenty",
+      imageUrl: "https://cdn.shopify.com/s/files/1/keep.jpg",
+      lastVerifiedAt: NOW,
+    }),
+    { ok: false, error: "http_429 retry_after=30" },
+    checkedAt,
+  );
+  assert.equal(next.status, "upcoming");
+  assert.equal(next.lastVerifiedAt, NOW);
+  assert.equal(next.lastCheckedAt, checkedAt);
+  assert.equal(next.lastCheckError, "http_429 retry_after=30");
+  assert.equal(next.brand, "Fenty Hair");
+  assert.equal(next.imageUrl, "https://cdn.shopify.com/s/files/1/keep.jpg");
+});
+
+test("a successful check fills a missing image and keeps the seeded brand", () => {
+  const reading = interpretShopifyProduct(
+    {
+      title: "The Bounce Besties",
+      vendor: "Fenty",
+      tags: ["badge|COMING SOON"],
+      body_html: "<p>Put your best curls on display.</p>",
+      variants: [{ available: false, price: "37.00" }],
+      images: [{ src: "https://cdn.shopify.com/s/files/1/fenty-new.jpg?v=9" }],
+    },
+    ctx({ host: "fentybeauty.com" }),
+  );
+  assert.equal(reading.ok && reading.brand, "Fenty");
+  const saved = applyReading(
+    entry({
+      id: FENTY_ID,
+      brand: "Fenty Hair",
+      imageUrl: null,
+      name: "The Bounce Besties",
+    }),
+    reading,
+    "2026-09-29T16:00:00.000Z",
+  );
+  assert.equal(saved.status, "upcoming");
+  assert.equal(saved.brand, "Fenty Hair");
+  assert.equal(saved.imageUrl, "https://cdn.shopify.com/s/files/1/fenty-new.jpg");
+  assert.equal(saved.lastVerifiedAt, "2026-09-29T16:00:00.000Z");
+  assert.equal(saved.lastCheckError, null);
+
+  const kept = applyReading(
+    entry({ id: FENTY_ID, brand: "Fenty Hair", imageUrl: "https://cdn.shopify.com/s/files/1/keep.jpg" }),
+    {
+      ok: true,
+      found: true,
+      stillPending: true,
+      nowLive: false,
+      brand: "Fenty Beauty",
+      imageUrl: null,
+    },
+    "2026-09-29T16:00:00.000Z",
+  );
+  assert.equal(kept.brand, "Fenty Hair");
+  assert.equal(kept.imageUrl, "https://cdn.shopify.com/s/files/1/keep.jpg");
+  assert.equal(kept.status, "upcoming");
+
+  assert.equal(preserveBrand("Sample Brand", "Rare Beauty"), "Rare Beauty");
+  assert.equal(preserveBrand("Patrick Ta Beauty", "Patrick Ta"), "Patrick Ta Beauty");
+  assert.equal(preserveBrand("Olive & June", "Olive and June"), "Olive & June");
+  assert.equal(keepImage("https://cdn.example.com/a.jpg", null), "https://cdn.example.com/a.jpg");
+  assert.equal(keepImage(null, " https://cdn.example.com/b.jpg "), "https://cdn.example.com/b.jpg");
+});
+
+test("a thrown fetch message is stored truncated and does not remove the row", () => {
+  const message = `fetch_failed: ${"x".repeat(400)}`;
+  const next = applyReading(entry({ lastVerifiedAt: NOW }), { ok: false, error: message }, "2026-09-29T16:00:00.000Z");
+  assert.equal(next.status, "upcoming");
+  assert.equal(next.lastVerifiedAt, NOW);
+  assert.ok(next.lastCheckError?.startsWith("fetch_failed: "));
+  assert.ok((next.lastCheckError ?? "").length <= 180);
 });

@@ -2,8 +2,12 @@
  * Re-check pre-order rows from Shopify product JSON, plus the product page
  * when a coming-soon tag is paired with stock or a ship month might be posted.
  * A failed fetch does not refresh last_verified_at. It does record
- * last_checked_at and last_check_error. Rows older than 36 hours drop off
- * the API until a later check succeeds.
+ * last_checked_at and last_check_error, including the thrown message.
+ * A 429 cools that host and does not remove the row. Rows older than 36
+ * hours drop off the API until a later check succeeds.
+ *
+ * Calls go through the shared subrequest budget. Existing upcoming rows are
+ * checked before shop discovery, and requests to one host are spaced.
  */
 
 import { honestDealScore } from "../../lib/discount";
@@ -13,11 +17,14 @@ import {
   entryFromRow,
   httpsProductUrl,
   interpretShopifyProduct,
+  classifyProductFetch,
+  keepImage,
   shopifyInStock,
   shopifyPreorderId,
   shopifySignal,
   SHOPIFY_HTML_ACCEPT,
   SHOPIFY_JSON_ACCEPT,
+  stableBrand,
   storefrontHtml,
   tagList,
   type PreorderEntry,
@@ -26,6 +33,16 @@ import {
   type SourceReading,
 } from "../../lib/preorder";
 import { BRAND_SHOPS, CATALOG_UA } from "./catalog-sources";
+import {
+  budgetedFetch,
+  fetchFailedError,
+  HostScheduler,
+  kvHostCooldown,
+  spreadByHost,
+  SubrequestBudget,
+  type BudgetedResponse,
+  type OutboundFetch,
+} from "./fetch-budget";
 
 interface Bindings {
   DB: D1Database;
@@ -45,14 +62,17 @@ const SHOPS_PER_TICK = 3;
 const REVERIFY_LIMIT = 24;
 
 async function fetchText(
+  outbound: OutboundFetch,
   url: string,
   referer: string,
   accept: string,
-): Promise<{ status: number; text: string | null; contentType: string | null }> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 8_000);
-  try {
-    const res = await fetch(url, {
+): Promise<BudgetedResponse> {
+  return budgetedFetch({
+    url,
+    budget: outbound.budget,
+    hosts: outbound.hosts,
+    timeoutMs: 8_000,
+    init: {
       method: "GET",
       headers: {
         "User-Agent": CATALOG_UA,
@@ -60,15 +80,8 @@ async function fetchText(
         "Accept-Language": "en-US,en;q=0.9",
         Referer: referer,
       },
-      signal: ctrl.signal,
-    });
-    const text = await res.text();
-    return { status: res.status, text, contentType: res.headers.get("content-type") };
-  } catch {
-    return { status: 0, text: null, contentType: null };
-  } finally {
-    clearTimeout(timer);
-  }
+    },
+  });
 }
 
 function hostOf(url: string): string {
@@ -86,27 +99,34 @@ function jsUrl(productUrl: string): string | null {
   return `${clean}.js`;
 }
 
-function pageFailure(page: { status: number; text: string | null; contentType: string | null }): string {
+function pageFailure(page: BudgetedResponse): string {
+  if (page.error) return page.error;
   if (page.status === 0) return "page_fetch_failed";
   if (page.status < 200 || page.status >= 300) return `page_http_${page.status}`;
   if (page.text && !storefrontHtml(page.text, page.contentType)) return "page_not_html";
   return "page_not_loaded";
 }
 
-async function readProduct(productUrl: string, now: Date, wantPage: boolean): Promise<SourceReading> {
+function stopsForBudget(error: string | null | undefined): boolean {
+  return error === "subrequest_budget_exhausted";
+}
+
+async function readProduct(
+  outbound: OutboundFetch,
+  productUrl: string,
+  now: Date,
+  wantPage: boolean,
+): Promise<SourceReading> {
   const source = jsUrl(productUrl);
   if (!source) return { ok: false, error: "bad_product_url" };
-  const productRes = await fetchText(source, productUrl, SHOPIFY_JSON_ACCEPT);
-  if (productRes.status === 404 || productRes.status === 410) {
-    return { ok: true, found: false, stillPending: false, nowLive: false };
-  }
-  if (productRes.status === 0) return { ok: false, error: "fetch_failed" };
-  if (!productRes.text || productRes.status < 200 || productRes.status >= 300) {
-    return { ok: false, error: `http_${productRes.status}` };
-  }
+  const productRes = await fetchText(outbound, source, productUrl, SHOPIFY_JSON_ACCEPT);
+  const failed = classifyProductFetch(productRes);
+  if (failed) return failed;
+  const body = productRes.text;
+  if (!body) return { ok: false, error: "product_json_parse" };
   let product: ShopifyReadInput | null = null;
   try {
-    product = JSON.parse(productRes.text) as ShopifyReadInput;
+    product = JSON.parse(body) as ShopifyReadInput;
   } catch {
     return { ok: false, error: "product_json_parse" };
   }
@@ -117,7 +137,7 @@ async function readProduct(productUrl: string, now: Date, wantPage: boolean): Pr
   let pageLoaded = false;
   let pageError: string | null = null;
   if (loadPage) {
-    const page = await fetchText(productUrl, productUrl, SHOPIFY_HTML_ACCEPT);
+    const page = await fetchText(outbound, productUrl, productUrl, SHOPIFY_HTML_ACCEPT);
     const html = page.text ? storefrontHtml(page.text, page.contentType) : null;
     if (html && page.status >= 200 && page.status < 300) {
       pageHtml = html;
@@ -155,7 +175,7 @@ async function saveEntry(db: D1Database, entry: PreorderEntry): Promise<void> {
   await db
     .prepare(
       `UPDATE preorders
-       SET kind = ?, name = ?, brand = ?, description = ?, image_url = ?, product_url = ?, source_url = ?,
+       SET kind = ?, name = ?, brand = ?, description = ?, image_url = COALESCE(?, image_url), product_url = ?, source_url = ?,
            price = ?, list_price = ?, announced_percent = ?, discount_confirmed = ?, currency = ?,
            starts_at = ?, ends_at = ?, date_precision = ?, date_label = ?, status = ?,
            linked_product_id = ?, last_verified_at = ?, last_checked_at = ?, last_check_error = ?, updated_at = ?
@@ -338,7 +358,17 @@ async function rotateShops(env: Bindings): Promise<string[]> {
   return picked;
 }
 
-export async function refreshPreorders(env: Bindings, now = new Date()): Promise<PreorderScanStats> {
+export async function refreshPreorders(
+  env: Bindings,
+  now = new Date(),
+  outbound?: OutboundFetch,
+): Promise<PreorderScanStats> {
+  const run =
+    outbound ??
+    {
+      budget: new SubrequestBudget(),
+      hosts: new HostScheduler({ store: kvHostCooldown(env.DEALS_CACHE) }),
+    };
   const stats: PreorderScanStats = { checked: 0, added: 0, live: 0, removed: 0, notificationsCreated: 0 };
   let rows: PreorderEntry[] = [];
   try {
@@ -350,23 +380,33 @@ export async function refreshPreorders(env: Bindings, now = new Date()): Promise
   const byId = new Map(rows.map((row) => [row.id, row]));
   const checked = new Set<string>();
 
-  const pending = rows
-    .filter((row) => row.status === "upcoming")
-    .sort((a, b) => (a.lastVerifiedAt ?? "").localeCompare(b.lastVerifiedAt ?? ""))
-    .slice(0, REVERIFY_LIMIT);
+  const pending = spreadByHost(
+    rows
+      .filter((row) => row.status === "upcoming")
+      .sort((a, b) => (a.lastVerifiedAt ?? "").localeCompare(b.lastVerifiedAt ?? ""))
+      .slice(0, REVERIFY_LIMIT),
+    (row) => hostOf(row.productUrl),
+  );
 
+  let budgetStop = false;
   for (const current of pending) {
+    if (budgetStop || run.budget.remaining() < 1) {
+      console.log(
+        JSON.stringify({ event: "preorder_budget_stop", checked: stats.checked, subrequests: run.budget.used }),
+      );
+      break;
+    }
     stats.checked += 1;
     checked.add(current.id);
     let reading: SourceReading;
     try {
-      reading = await readProduct(current.productUrl, now, current.datePrecision === "month");
+      reading = await readProduct(run, current.productUrl, now, current.datePrecision === "month");
     } catch (err) {
-      const detail = String(err).replace(/\s+/g, " ").trim().slice(0, 160);
-      reading = { ok: false, error: detail ? `fetch_threw: ${detail}` : "fetch_threw" };
+      reading = { ok: false, error: fetchFailedError(err) };
     }
     if (!reading.ok) {
       console.log(JSON.stringify({ event: "preorder_check_fail", id: current.id, error: reading.error ?? "unverified" }));
+      if (stopsForBudget(reading.error)) budgetStop = true;
     }
     const next = applyReading(current, reading, nowIso);
     if (next.status === "live" && current.status !== "live") {
@@ -391,12 +431,16 @@ export async function refreshPreorders(env: Bindings, now = new Date()): Promise
       next.lastCheckError !== current.lastCheckError ||
       next.price !== current.price ||
       next.dateLabel !== current.dateLabel ||
-      next.startsAt !== current.startsAt
+      next.startsAt !== current.startsAt ||
+      next.brand !== current.brand ||
+      next.imageUrl !== current.imageUrl
     ) {
       await saveEntry(env.DB, next);
       byId.set(next.id, next);
     }
   }
+
+  if (budgetStop || run.budget.remaining() < 2) return stats;
 
   let shops: string[] = [];
   try {
@@ -406,14 +450,16 @@ export async function refreshPreorders(env: Bindings, now = new Date()): Promise
   }
 
   for (const origin of shops) {
+    if (run.budget.remaining() < 2) break;
     let host = "";
     try {
       host = new URL(origin).hostname;
     } catch {
       continue;
     }
-    const list = await fetchText(`${origin}/products.json?limit=250`, `${origin}/`, SHOPIFY_JSON_ACCEPT);
-    if (list.status < 200 || list.status >= 300 || !list.text) continue;
+    const list = await fetchText(run, `${origin}/products.json?limit=250`, `${origin}/`, SHOPIFY_JSON_ACCEPT);
+    if (stopsForBudget(list.error)) break;
+    if (list.status === 429 || list.status < 200 || list.status >= 300 || !list.text) continue;
     let products: ShopifyReadInput[] = [];
     try {
       const parsed = JSON.parse(list.text) as { products?: ShopifyReadInput[] };
@@ -434,7 +480,9 @@ export async function refreshPreorders(env: Bindings, now = new Date()): Promise
       let pageHtml: string | null = null;
       let pageLoaded = false;
       if (signal === "preorder" || signal === "coming_ambiguous") {
-        const page = await fetchText(productUrl, productUrl, SHOPIFY_HTML_ACCEPT);
+        if (run.budget.remaining() < 1) break;
+        const page = await fetchText(run, productUrl, productUrl, SHOPIFY_HTML_ACCEPT);
+        if (stopsForBudget(page.error)) break;
         const html = page.status >= 200 && page.status < 300 && page.text ? storefrontHtml(page.text, page.contentType) : null;
         if (html) {
           pageHtml = html;
@@ -461,7 +509,13 @@ export async function refreshPreorders(env: Bindings, now = new Date()): Promise
         continue;
       }
       if (existing.status === "upcoming") continue;
-      const revived = { ...fresh, createdAt: existing.createdAt, linkedProductId: existing.linkedProductId };
+      const revived = {
+        ...fresh,
+        createdAt: existing.createdAt,
+        linkedProductId: existing.linkedProductId,
+        brand: stableBrand(existing.id, existing.brand, fresh.brand),
+        imageUrl: keepImage(existing.imageUrl, fresh.imageUrl),
+      };
       await saveEntry(env.DB, revived);
       byId.set(id, revived);
       stats.added += 1;
