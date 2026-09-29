@@ -22,7 +22,7 @@ You still need your own Apple Developer Program membership to upload. Deploy the
 - D1 — products, price history, wishlist, notifications
 - KV — deal-scan cache
 - Workers AI — catalog-grounded on-site product advisor (`env.AI`)
-- Cron Trigger — catalog availability + price refresh every 15 minutes (Sephora / Shopify JSON)
+- Cron Triggers — pre-order checks every 15 minutes, catalog availability + price refresh on an offset schedule (Sephora / Shopify JSON)
 - Mock retailer feed at `src/services/deals/` (demo restock / drop only; production cron does not invent prices or stock; **do not scrape storefronts**)
 
 ## Local setup
@@ -63,15 +63,17 @@ The Worker config lives in **`wrangler.toml`** (Wrangler also accepts `wrangler.
 - `DB` — D1 database `beauti`
 - `DEALS_CACHE` — KV namespace `beauti-deals-cache`
 - `AI` — Workers AI (`[ai] binding = "AI"`). No third-party API key. Used by `POST /api/advisor`.
-- Cron `*/15 * * * *` → `scheduled` handler
+- Cron `*/15 * * * *` → pre-order checks
+- Cron `8,23,38,53 * * * *` → catalog availability and price refresh
 
-You can fire the production catalog sync locally:
+`scheduled` reads `event.cron` and runs one of those jobs. Each job has its own Workers invocation, so each gets its own outbound subrequest budget (45, under the free-plan cap of 50; redirects count). A scheduled hit with no cron runs pre-orders first, then the catalog, on one shared budget.
 
 ```bash
-curl "http://localhost:5173/cdn-cgi/local/scheduled?format=json"
+curl "http://localhost:5173/cdn-cgi/local/scheduled?cron=*/15+*+*+*+*&format=json"
+curl "http://localhost:5173/cdn-cgi/local/scheduled?cron=8,23,38,53+*+*+*+*&format=json"
 ```
 
-That hits the same 15-minute Cron Trigger path: a rotating batch of SKUs is quoted from Sephora catalog JSON and Shopify product JSON, then D1 `availability` / `restock_estimate` (and price when the source includes it) are persisted. Wishlist restock alerts fire on real OOS → in-stock transitions.
+The catalog pass quotes a rotating batch from Sephora catalog JSON and Shopify product JSON, then persists D1 `availability` / `restock_estimate` (and price when the source includes it). Wishlist restock alerts fire on real OOS → in-stock transitions. The cursor moves only by products that run actually started, so a budget stop does not skip the rest of the catalog.
 
 **Notifications → Run deal scan** is a separate demo path (`POST /api/deals/scan` with `force`). It still forces a mock restock + price drop so alerts are easy to demo. It does **not** call retailer APIs.
 
@@ -103,14 +105,15 @@ Shops scanned from the allowlist in `src/services/deals/catalog-sources.ts`, plu
 
 Upcoming deals is empty on purpose. Sephora search JSON did not include an `isComingSoon` flag, and the product JSON endpoint returned 403 from this environment, so no Sephora coming soon row was seeded. Ulta's fall 21 Days of Beauty page describes 28 August through 17 September 2026, which is already over. Third-party calendars for a holiday savings event were not used.
 
-The cron (`*/15 * * * *`, same handler as the catalog scan) re-reads each upcoming row:
+Pre-order checks run on `*/15 * * * *`, in their own invocation, before the offset catalog pass. Upcoming rows are re-read first. Shop discovery runs only if budget remains. Requests to one host are spaced, and they send a normal browser User-Agent.
 
-1. Fetch the product `.js` with `Accept: application/json`. A 404 removes the row. A timeout or any other failed check leaves `last_verified_at` alone, writes `last_checked_at` and `last_check_error`, and logs `preorder_check_fail`.
+1. Fetch the product `.js` with `Accept: application/json`. A 404 removes the row. A 429 stores `http_429 retry_after=<seconds>`, cools that host for the Retry-After period (15 seconds when the header is missing), and does not remove the row or refresh `last_verified_at`. A thrown fetch stores `fetch_failed: <message>` (truncated) and logs `preorder_check_fail`. Spending the subrequest budget stores `subrequest_budget_exhausted` and stops the run. Any other failed check also leaves `last_verified_at` alone and writes `last_checked_at` plus `last_check_error`.
 2. A pre-order tag, or a coming-soon tag with every variant unavailable, keeps the row.
 3. A coming-soon tag with stock still available stays only when the product page shows a coming-soon waitlist and no add to cart button. That page is requested as HTML (`Accept: text/html`). Shopify returns a product JSON document when `application/json` is preferred, and that document has no waitlist button, so the check fails instead of confirming the row. An add to cart button means it is live. A page that shows both, or neither, stays unverified.
 4. "will ship in {Month}" updates the month label. If that sentence is gone, the label becomes "Release date not announced".
 5. A datetime or calendar date that has passed removes the row unless the source published a new future date. If the source now shows a normal in-stock product, the row is marked live, the catalog price is updated when we have one, wishlisted hearts are copied onto that product, and a restock notification is written.
-6. The API hides rows whose last successful check is older than 36 hours, and any row that is not `upcoming`.
+6. The API hides rows whose last successful check is older than 36 hours, and any row that is not `upcoming`. That window is unchanged.
+7. A successful check fills a missing image from the product JSON. A stored image is never replaced with null. Seeded display names stay put when the vendor is only a shorter form or a generic line name (`Fenty` or `Fenty Beauty` does not replace `Fenty Hair`). A clearly different brand from the source is saved.
 
 Tags are not stored on pre-order rows and are not returned by `/api/preorders`. `0013_preorders.sql` is a normal migration. `ensureCatalog` does not `db.exec` it.
 
@@ -137,12 +140,14 @@ The cron already creates notification records from **real** restock / price-drop
 ```
 src/services/deals/
   types.ts            DealProvider, DealSnapshot, AffiliateClient
+  fetch-budget.ts     45-subrequest cap, host spacing, Retry-After, catalog rotation
   catalog-sources.ts  Sephora catalog JSON + Shopify product JSON (production)
+  preorder-scan.ts    Upcoming row re-checks and shop discovery
   mock-retailer.ts    MockRetailerFeed (identity snapshots; forced demo events only)
   index.ts            scanDeals() → D1 + KV + wishlist alerts
 ```
 
-Cron (`*/15 * * * *`, no `force`) loads a rotating batch (~48 SKUs, wishlisted OOS first) and quotes each from:
+The catalog cron (`8,23,38,53 * * * *`, no `force`) loads a rotating batch (up to 24 products, and fewer when the 45-subrequest budget runs out; wishlisted out-of-stock first, capped so the rotation still moves) and quotes each from:
 
 1. Linked Shopify `/products/{handle}.js` when the stored URL is a brand PDP
 2. Sephora `/api/v2/catalog/search` (and product JSON when that card includes `isOutOfStock`)
@@ -201,6 +206,7 @@ npm run db:migrate:remote    # production D1 — applies pending files in migrat
 | `0012_confirm_prices.sql` | Batched `UPDATE`s for SKUs whose sell price or compare-at changed after a fresh Sephora / Shopify / brand `products.json` check. Raises an understated percent when a real compare-at exists. Clears a percent when the source has no compare-at. Do **not** `db.exec` this from `ensureCatalog`. |
 | `0013_preorders.sql` | Pre-order table plus the coming soon rows verified on 25 September 2026. Do **not** `db.exec` this from `ensureCatalog`. |
 | `0015_preorder_checks.sql` | `preorders.last_checked_at` and `preorders.last_check_error` for failed re-checks. Does not change `last_verified_at`. Do **not** `db.exec` this from `ensureCatalog`. |
+| `0016_preorder_brand.sql` | Restores the seeded `Fenty Hair` display name if a cron shortened it to `Fenty` or `Fenty Beauty`. Does not change `last_verified_at` or `image_url`. Do **not** `db.exec` this from `ensureCatalog`. |
 
 `INSERT OR IGNORE` so re-applying is safe on an already-seeded database.
 

@@ -318,10 +318,107 @@ function checkErrorText(raw: string | undefined): string {
   return text || "unverified";
 }
 
+/** Display names from migrations/0013_preorders.sql. A shorter vendor must not replace these. */
+const SEEDED_PREORDER_BRANDS: Record<string, string> = {
+  "shopify:fentybeauty.com:the-bounce-besties-mini-leave-in-conditioner-spray-full-size-curl-defining-cream":
+    "Fenty Hair",
+  "shopify:makeupbymario.com:marios-face-eye-brush-trio": "Makeup by Mario",
+  "shopify:makeupbymario.com:cream-eyeshadow-duo": "Makeup by Mario",
+  "shopify:makeupbymario.com:mini-blush-veil-skin-enhancer-duo": "Makeup by Mario",
+  "shopify:makeupbymario.com:mini-lip-liner-trio": "Makeup by Mario",
+  "shopify:oliveandjune.com:12-days-of-mani-magic-holiday-calendar": "Olive & June",
+  "shopify:oliveandjune.com:pressies-12-days-of-mani-magic-holiday-calendar": "Olive & June",
+  "shopify:oliveandjune.com:8-nights-of-mani-magic-hanukkah-set": "Olive & June",
+  "shopify:patrickta.com:pro-signature-brush-collection": "Patrick Ta Beauty",
+};
+
+const BRAND_CATEGORY_WORDS = new Set([
+  "beauty",
+  "hair",
+  "skin",
+  "cosmetics",
+  "makeup",
+  "fragrance",
+  "skincare",
+]);
+
+export function normBrand(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * Keep the current display name when the incoming vendor is only a shorter
+ * form or a generic line swap (Fenty vs Fenty Hair, Fenty Beauty vs Fenty Hair).
+ * A different brand from the source replaces it.
+ */
+export function preserveBrand(current: string, incoming: string | null | undefined): string {
+  const prev = current.trim();
+  const next = (incoming ?? "").replace(/\s+/g, " ").trim();
+  if (!next) return prev;
+  if (!prev) return next;
+  const a = normBrand(prev);
+  const b = normBrand(next);
+  if (!b) return prev;
+  if (a === b) return prev;
+  if (a.startsWith(`${b} `)) return prev;
+  if (b.startsWith(`${a} `)) return next;
+  const prevTokens = a.split(" ");
+  const nextTokens = b.split(" ");
+  if (prevTokens.length >= 2 && nextTokens.length >= 2 && prevTokens[0] === nextTokens[0]) {
+    const stem = prevTokens.filter((token) => !BRAND_CATEGORY_WORDS.has(token)).join(" ");
+    const nextStem = nextTokens.filter((token) => !BRAND_CATEGORY_WORDS.has(token)).join(" ");
+    if (stem && stem === nextStem && nextTokens.some((token) => BRAND_CATEGORY_WORDS.has(token))) return prev;
+  }
+  return next;
+}
+
+/** Seeded rows keep their display name when the stored brand was already shortened. */
+export function stableBrand(id: string, current: string, incoming: string | null | undefined): string {
+  const seed = SEEDED_PREORDER_BRANDS[id];
+  const anchor = seed && preserveBrand(seed, current) === seed ? seed : current;
+  return preserveBrand(anchor, incoming);
+}
+
+/**
+ * 404 and 410 remove the row. A 429, a thrown fetch, and a spent subrequest
+ * budget stay unverified.
+ */
+export function classifyProductFetch(res: {
+  status: number;
+  text: string | null;
+  error: string | null;
+}): SourceReading | null {
+  if (res.status === 404 || res.status === 410) {
+    return { ok: true, found: false, stillPending: false, nowLive: false };
+  }
+  if (res.error || res.status === 0 || res.status === 429) {
+    return { ok: false, error: res.error ?? "fetch_failed" };
+  }
+  if (!res.text || res.status < 200 || res.status >= 300) {
+    return { ok: false, error: res.error ?? `http_${res.status}` };
+  }
+  return null;
+}
+
+/** A successful check can fill an image. It cannot wipe one that is already stored. */
+export function keepImage(current: string | null, incoming: string | null | undefined): string | null {
+  if (typeof incoming === "string") {
+    const trimmed = incoming.trim();
+    if (trimmed) return trimmed;
+  }
+  return current || null;
+}
+
 export function applyReading(entry: PreorderEntry, reading: SourceReading, nowIso: string): PreorderEntry {
   if (!reading.ok) {
     return {
       ...entry,
+      brand: stableBrand(entry.id, entry.brand, entry.brand),
       lastCheckedAt: nowIso,
       lastCheckError: checkErrorText(reading.error),
       updatedAt: nowIso,
@@ -330,6 +427,7 @@ export function applyReading(entry: PreorderEntry, reading: SourceReading, nowIs
   if (!reading.found) {
     return {
       ...entry,
+      brand: stableBrand(entry.id, entry.brand, entry.brand),
       status: "removed",
       lastVerifiedAt: nowIso,
       lastCheckedAt: nowIso,
@@ -341,9 +439,9 @@ export function applyReading(entry: PreorderEntry, reading: SourceReading, nowIs
     ...entry,
     kind: reading.kind ?? entry.kind,
     name: reading.name || entry.name,
-    brand: reading.brand || entry.brand,
+    brand: stableBrand(entry.id, entry.brand, reading.brand),
     description: reading.description || entry.description,
-    imageUrl: reading.imageUrl === undefined ? entry.imageUrl : reading.imageUrl,
+    imageUrl: keepImage(entry.imageUrl, reading.imageUrl),
     productUrl: reading.productUrl || entry.productUrl,
     sourceUrl: reading.sourceUrl || entry.sourceUrl,
     price: reading.price === undefined ? entry.price : reading.price,

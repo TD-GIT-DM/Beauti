@@ -25,9 +25,12 @@ migrations_dir = "migrations"
 binding = "DEALS_CACHE"
 id = "80ead3ba6f2b4678956c3cac9c8bebc8"
 
-# Catalog availability + price refresh + wishlist restock alerts every 15 minutes (UTC)
+# Two schedules so each invocation stays under the Workers free-plan cap of 50
+# external subrequests (redirects count). The handler reads event.cron.
+# Pre-orders: */15 (their own budget, before the catalog pass).
+# Catalog: 8,23,38,53 (rotating batch on the remaining headroom of a fresh budget).
 [triggers]
-crons = ["*/15 * * * *"]
+crons = ["*/15 * * * *", "8,23,38,53 * * * *"]
 
 [vars]
 APP_NAME = "Beauti"
