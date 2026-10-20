@@ -25,12 +25,13 @@ migrations_dir = "migrations"
 binding = "DEALS_CACHE"
 id = "80ead3ba6f2b4678956c3cac9c8bebc8"
 
-# Two schedules so each invocation stays under the Workers free-plan cap of 50
-# external subrequests (redirects count). The handler reads event.cron.
+# Separate schedules so each invocation stays under the Workers free-plan cap
+# of 50 external subrequests (redirects count). The handler reads event.cron.
 # Pre-orders: */15 (their own budget, before the catalog pass).
-# Catalog: 8,23,38,53 (rotating batch on the remaining headroom of a fresh budget).
+# Catalog: 8,23,38,53 (rotating batch on a fresh budget).
+# Reviews: minute 5 of each hour (slow rotation, its own budget).
 [triggers]
-crons = ["*/15 * * * *", "8,23,38,53 * * * *"]
+crons = ["*/15 * * * *", "8,23,38,53 * * * *", "5 * * * *"]
 
 [vars]
 APP_NAME = "Beauti"

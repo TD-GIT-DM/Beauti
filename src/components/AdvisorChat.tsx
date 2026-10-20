@@ -2,7 +2,9 @@ import { type FormEvent, type KeyboardEvent, useEffect, useId, useRef, useState 
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { formatPrice, stockLabel } from "../lib/format";
+import { hasCardRating } from "../lib/reviews";
 import type { AdvisorMessage, AdvisorProduct, AdvisorSearchHint } from "../types";
+import { ReviewStars } from "./ReviewStars";
 
 const SUGGESTIONS = ["covers my bad skin", "vanilla perfume"];
 
@@ -210,6 +212,9 @@ function AdvisorPickCard({ product, onOpen }: { product: AdvisorProduct; onOpen:
           {formatPrice(product.price, product.currency)}
           <span className={`stock ${stockClass}`}>{stockLabel(product)}</span>
         </span>
+        {hasCardRating(product.reviews) ? (
+          <ReviewStars rating={product.reviews.rating} count={product.reviews.count} compact />
+        ) : null}
       </span>
     </button>
   );

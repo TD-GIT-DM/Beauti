@@ -22,7 +22,7 @@ You still need your own Apple Developer Program membership to upload. Deploy the
 - D1 — products, price history, wishlist, notifications
 - KV — deal-scan cache
 - Workers AI — catalog-grounded on-site product advisor (`env.AI`)
-- Cron Triggers — pre-order checks every 15 minutes, catalog availability + price refresh on an offset schedule (Sephora / Shopify JSON)
+- Cron Triggers — pre-order checks every 15 minutes, catalog availability + price refresh on an offset schedule (Sephora / Shopify JSON), and a separate hourly review refresh
 - Mock retailer feed at `src/services/deals/` (demo restock / drop only; production cron does not invent prices or stock; **do not scrape storefronts**)
 
 ## Local setup
@@ -65,12 +65,14 @@ The Worker config lives in **`wrangler.toml`** (Wrangler also accepts `wrangler.
 - `AI` — Workers AI (`[ai] binding = "AI"`). No third-party API key. Used by `POST /api/advisor`.
 - Cron `*/15 * * * *` → pre-order checks
 - Cron `8,23,38,53 * * * *` → catalog availability and price refresh
+- Cron `5 * * * *` → review ratings and comments (its own budget)
 
-`scheduled` reads `event.cron` and runs one of those jobs. Each job has its own Workers invocation, so each gets its own outbound subrequest budget (45, under the free-plan cap of 50; redirects count). A scheduled hit with no cron runs pre-orders first, then the catalog, on one shared budget.
+`scheduled` reads `event.cron` and runs one of those jobs. Each job has its own Workers invocation, so each gets its own outbound subrequest budget (45, under the free-plan cap of 50; redirects count). A scheduled hit with no cron runs pre-orders first, then the catalog, on one shared budget. Reviews are not part of that combined run.
 
 ```bash
 curl "http://localhost:5173/cdn-cgi/local/scheduled?cron=*/15+*+*+*+*&format=json"
 curl "http://localhost:5173/cdn-cgi/local/scheduled?cron=8,23,38,53+*+*+*+*&format=json"
+curl "http://localhost:5173/cdn-cgi/local/scheduled?cron=5+*+*+*+*&format=json"
 ```
 
 The catalog pass quotes a rotating batch from Sephora catalog JSON and Shopify product JSON, then persists D1 `availability` / `restock_estimate` (and price when the source includes it). Wishlist restock alerts fire on real OOS → in-stock transitions. The cursor moves only by products that run actually started, so a budget stop does not skip the rest of the catalog.
@@ -153,7 +155,7 @@ The catalog cron (`8,23,38,53 * * * *`, no `force`) loads a rotating batch (up t
 2. Sephora `/api/v2/catalog/search` (and product JSON when that card includes `isOutOfStock`)
 3. Brand Shopify `products.json` when the brand has a public shop and search omitted stock flags
 
-Unverified SKUs are left unchanged — stock is never invented. Manual **Run deal scan** still uses `MockRetailerFeed` + forced events. Do not scrape third-party HTML.
+Unverified SKUs are left unchanged. Stock is never invented. Manual **Run deal scan** still uses `MockRetailerFeed` + forced events. Price and stock still come from catalog JSON, not from storefront HTML. Review text is a separate hourly job, described below.
 
 ## Deploy to Cloudflare
 
@@ -207,6 +209,7 @@ npm run db:migrate:remote    # production D1 — applies pending files in migrat
 | `0013_preorders.sql` | Pre-order table plus the coming soon rows verified on 25 September 2026. Do **not** `db.exec` this from `ensureCatalog`. |
 | `0015_preorder_checks.sql` | `preorders.last_checked_at` and `preorders.last_check_error` for failed re-checks. Does not change `last_verified_at`. Do **not** `db.exec` this from `ensureCatalog`. |
 | `0016_preorder_brand.sql` | Restores the seeded `Fenty Hair` display name if a cron shortened it to `Fenty` or `Fenty Beauty`. Does not change `last_verified_at` or `image_url`. Do **not** `db.exec` this from `ensureCatalog`. |
+| `0017_reviews.sql` | `product_reviews` cache for average rating, review count, and up to five high and five low comments. The hourly cron fills it. Do **not** `db.exec` this from `ensureCatalog`. |
 
 `INSERT OR IGNORE` so re-applying is safe on an already-seeded database.
 
@@ -297,12 +300,40 @@ OOS → `out_of_stock` and `restock_estimate` only if the source sent a date / �
 
 Generators prefer official pack shots from `scripts/lib/catalog-media.mjs` (and `scripts/data/real-product-images.json` when present) instead of inventing Unsplash URLs. Product links prefer a verified Sephora/Ulta/brand PDP; SQL fallbacks stay on Sephora/Ulta as a path (no `?`). The Worker emits `search?keyword=` / Ulta `search?search=` only when the stored URL is still fake or missing.
 
+## Reviews
+
+Product cards show an average star rating and review count only when a retailer or brand source published both. The product page adds up to five 4 or 5 star comments and up to five 1 or 2 star comments. If the source has no 1 or 2 star comments, 3 star comments are shown and labeled as mixed. Comment text is copied as written (long comments are cut with `...`). A full name from the source is shown as a first name and last initial. A single display handle is kept.
+
+The line under the quotes is `Reviews from <source>` and links to the product page the numbers came from, plus the date of the fetch. Nothing is invented. A product that was checked and had no verifiable reviews says "No reviews found yet." A product that has not been checked yet shows nothing.
+
+Sources, in the order the cron tries them:
+
+1. **Sephora product pages** (`-P` id): Bazaarvoice Conversations `batch.json`, using the public display passkey from Sephora's own `bvapi.js`. One request returns the average, the count, higher comments, lower comments, and 3 star comments.
+2. **Brand product pages**: the page's JSON-LD `aggregateRating` / `review`, then a public review app when the page embeds one: Yotpo widget JSON, Okendo store API, or Bazaarvoice the same way as Sephora. PowerReviews comments that are already in JSON-LD are kept and labeled PowerReviews.
+3. **Search and brand-index URLs** (Sephora `/search/...`, Ulta `/brand/...`) are not a single product. They are stored as no source and the page says no reviews were found. They do not spend an outbound request.
+
+The passkey is cached in KV for a week. Hosts are spaced, `429` responses cool that host, and a run stops at 45 outbound subrequests. Up to 10 products are started per hour. A success is refreshed after 7 days. A failed read waits 12 hours and does not wipe a previous good snapshot. `0017_reviews.sql` creates `product_reviews`. `ensureCatalog` does not apply it.
+
+List routes (`/api/products`, `/api/deals`, `/api/wishlist`) include the rating summary and omit the comment text. `GET /api/products/:id` includes the comments. Review JSON does not include catalog tags.
+
+### Coverage
+
+Checked from this environment on 20 October 2026 against the URLs in `scripts/data/real-product-urls.json` (580 products). The live cron fills D1 over the following days; these counts are what those sources returned when asked directly.
+
+| Group | Products | With a rating and count | With at least one quoted comment |
+| --- | --- | --- | --- |
+| Sephora product pages | 367 | 367 | 367 |
+| Brand product pages | 74 | 45 | 39 |
+| Search or brand index (no single product) | 139 | 0 | 0 |
+
+All 367 Sephora pages returned a Bazaarvoice average, a count, and both higher and lower comments. Of the 74 brand pages, 45 had a rating and count: Yotpo 15, Bazaarvoice 14, Okendo 9, PowerReviews 2, and 5 from JSON-LD on the brand page (Fenty Beauty, Fenty Skin, Rare Beauty). 39 of those 45 also had at least one comment. 22 brand pages had no review markup we could read. 4 brand URLs returned 404. 2 use Stamped and 1 uses Junip. Those three widgets, plus Judge.me, are recognized and left blank rather than filled with a guess. A later pass can add them. A failed read shows nothing on the card until a later check succeeds. A page with no review markup says "No reviews found yet."
+
 ## API (for a future mobile app)
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/api/products?q=&minPrice=&maxPrice=&minDiscount=&sort=&limit=` | Catalog + tokenized search. `q` also matches private tags. `sort`: `deal` (default), `price_asc`, `price_desc`, `discount_desc`. Product JSON omits `tags`. A `tag` query param is ignored. |
-| GET | `/api/products/:id` | Detail + price history. Product JSON omits `tags`. |
+| GET | `/api/products?q=&minPrice=&maxPrice=&minDiscount=&sort=&limit=` | Catalog + tokenized search. `q` also matches private tags. `sort`: `deal` (default), `price_asc`, `price_desc`, `discount_desc`. Product JSON omits `tags`. Rating summary is included when one has been fetched. A `tag` query param is ignored. |
+| GET | `/api/products/:id` | Detail + price history + review quotes when a source has them. Product JSON omits `tags`. |
 | GET | `/api/deals` | Top 5 by computed discount % |
 | GET | `/api/preorders` | Upcoming deals and coming soon. Omits tags. Hides rows not verified in the last 36 hours. |
 | POST/DELETE | `/api/preorders/:id/wishlist` | Heart a listed pre-order row |

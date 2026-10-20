@@ -37,6 +37,7 @@ import {
   type ProductRecord,
   type ProductRow,
 } from "./db";
+import { readReviewDetail } from "./reviews";
 import { listPublicPreorders, setPreorderWish, wishedPreorderCards } from "./preorders";
 
 
@@ -139,6 +140,7 @@ api.get("/api/products/:id", async (c) => {
   const loved = await lovedFor(c, deviceId, user);
   const priceHistory = await loadHistory(c.env.DB, id);
   const product = withDiscount(mapProduct(row, { priceHistory, wishlisted: loved.has(id) }));
+  product.reviews = await readReviewDetail(c.env.DB, id);
   return json({ product: omitStoredTags(product) }, {}, { deviceId });
 });
 

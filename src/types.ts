@@ -13,6 +13,33 @@ export interface PricePoint {
   recordedAt: string;
 }
 
+/** A shopper comment copied from the retailer or review app. Text is verbatim. */
+export interface ReviewQuote {
+  rating: number;
+  text: string;
+  date: string | null;
+  author: string | null;
+}
+
+/**
+ * Verified review snapshot.
+ * `ok` has a rating, a count, or quoted comments from a real source.
+ * `none` means the page was checked and nothing verifiable was there.
+ * Cards only show stars when `rating` and `count` are both set.
+ */
+export interface ProductReviews {
+  status: "ok" | "none";
+  rating: number | null;
+  count: number | null;
+  source: string | null;
+  sourceUrl: string | null;
+  fetchedAt: string | null;
+  positive?: ReviewQuote[];
+  negative?: ReviewQuote[];
+  /** `mixed` is 3-star comments, used only when the source had no 1- or 2-star text. */
+  negativeLabel?: "negative" | "mixed" | null;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -32,6 +59,7 @@ export interface Product {
   restockEstimate: string | null;
   priceHistory: PricePoint[];
   wishlisted?: boolean;
+  reviews: ProductReviews | null;
 }
 
 export interface AppNotification {
@@ -86,6 +114,7 @@ export interface AdvisorProduct {
   currency: string;
   availability: Availability;
   restockEstimate: string | null;
+  reviews?: ProductReviews | null;
 }
 
 export interface AdvisorMessage {

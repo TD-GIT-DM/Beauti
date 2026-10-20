@@ -1,6 +1,7 @@
 import { productDiscountPercent } from "../src/lib/discount";
 import { resolveProductUrl } from "../src/lib/product-url";
 import type { Availability, PromoCode } from "../src/services/deals";
+import { attachReviewSummaries } from "./reviews";
 
 export interface ProductRecord {
   id: string;
@@ -20,6 +21,7 @@ export interface ProductRecord {
   restockEstimate: string | null;
   priceHistory: Array<{ price: number; recordedAt: string }>;
   wishlisted?: boolean;
+  reviews: import("../src/types").ProductReviews | null;
 }
 
 export interface ProductRow {
@@ -71,6 +73,7 @@ export function mapProduct(
     restockEstimate: row.restock_estimate,
     priceHistory: extras.priceHistory ?? [],
     wishlisted: extras.wishlisted,
+    reviews: null,
   };
 }
 
@@ -135,9 +138,11 @@ export async function decorateProducts(
   loved: Set<string>,
 ): Promise<ProductRecord[]> {
   const peaks = await loadPeakPrices(db);
-  return rows.map((row) =>
+  const products = rows.map((row) =>
     withDiscount(mapProduct(row, { wishlisted: loved.has(row.id) }), peaks.get(row.id)),
   );
+  await attachReviewSummaries(db, products);
+  return products;
 }
 
 export async function loadHistory(
