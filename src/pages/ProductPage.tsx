@@ -5,6 +5,7 @@ import { EmptyState } from "../components/EmptyState";
 import { formatPrice, stockLabel } from "../lib/format";
 import { HeartButton } from "../components/HeartButton";
 import { ProductCover } from "../components/ProductCover";
+import { ReviewPanel } from "../components/ReviewPanel";
 import { ShopLink } from "../components/ShopLink";
 import { useApp } from "../context/AppContext";
 import type { Product } from "../types";
@@ -86,6 +87,7 @@ export function ProductPage() {
             {product.description}
             {restockNote}
           </p>
+          <ReviewPanel reviews={product.reviews} />
           {product.priceHistory.length > 1 ? (
             <>
               <p className="brand-kicker">Price history</p>

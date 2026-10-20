@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { formatDiscount, formatPrice, stockLabel } from "../lib/format";
+import { hasCardRating } from "../lib/reviews";
 import type { Product } from "../types";
 import { HeartButton } from "./HeartButton";
+import { ReviewStars } from "./ReviewStars";
 import { ShopLink } from "./ShopLink";
 
 interface Props {
@@ -87,6 +89,9 @@ export function ProductCover({
             {stockLabel(product)}
           </span>
         </div>
+        {variant !== "detail" && hasCardRating(product.reviews) ? (
+          <ReviewStars rating={product.reviews.rating} count={product.reviews.count} compact={variant === "grid"} />
+        ) : null}
         {product.availability === "out_of_stock" ? (
           <p className="lede" style={{ margin: 0 }}>
             Restock: {product.restockEstimate ?? "unknown / may not return"}

@@ -10,6 +10,7 @@ import {
   HostScheduler,
   planCatalogIds,
   PREORDER_CRON,
+  REVIEWS_CRON,
   scheduledJob,
   spreadByHost,
   SUBREQUEST_BUDGET,
@@ -257,16 +258,19 @@ test("same-host requests wait, and a batch is interleaved across hosts", async (
   );
 });
 
-test("crons dispatch pre-orders and catalog onto separate invocations", () => {
+test("crons dispatch pre-orders, catalog, and reviews onto separate invocations", () => {
   assert.equal(scheduledJob(PREORDER_CRON), "preorders");
   assert.equal(scheduledJob(CATALOG_CRON), "catalog");
+  assert.equal(scheduledJob(REVIEWS_CRON), "reviews");
   assert.equal(scheduledJob(undefined), "both");
   assert.equal(scheduledJob(""), "both");
+  assert.equal(scheduledJob("0 * * * *"), "both");
   const toml = readFileSync(new URL("../../../wrangler.toml", import.meta.url), "utf8");
-  assert.match(toml, /crons = \["\*\/15 \* \* \* \*", "8,23,38,53 \* \* \* \*"\]/);
+  assert.match(toml, /crons = \["\*\/15 \* \* \* \*", "8,23,38,53 \* \* \* \*", "5 \* \* \* \*"\]/);
   const scheduled = readFileSync(new URL("../../../worker/scheduled.ts", import.meta.url), "utf8");
   assert.match(scheduled, /scheduledJob\(cron\)/);
-  assert.match(scheduled, /job/);
+  assert.match(scheduled, /job === "reviews"/);
+  assert.match(scheduled, /scanReviews/);
   const scan = readFileSync(new URL("./preorder-scan.ts", import.meta.url), "utf8");
   const catalog = readFileSync(new URL("./catalog-sources.ts", import.meta.url), "utf8");
   assert.match(scan, /CATALOG_UA/);

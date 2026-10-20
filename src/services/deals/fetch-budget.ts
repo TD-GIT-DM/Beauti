@@ -5,9 +5,10 @@
  * hop counts. D1 and KV do not count toward that 50. This run stops at 45
  * so a redirect or a late fetch still fits.
  *
- * Pre-order checks and catalog quotes are separate cron triggers, so each
- * gets its own 45. A combined run (no cron string) checks pre-orders first
- * and gives the catalog whatever remains.
+ * Pre-order checks, catalog quotes, and review refresh are separate cron
+ * triggers, so each gets its own 45. A combined run (no cron string) checks
+ * pre-orders first and gives the catalog whatever remains. Reviews stay on
+ * their own cron because they are not part of that combined run.
  */
 
 export const SUBREQUEST_BUDGET = 45;
@@ -25,13 +26,16 @@ export const DEFAULT_RETRY_AFTER_MS = 15_000;
 export const PREORDER_CRON = "*/15 * * * *";
 /** Catalog pass, offset so it does not share the pre-order invocation. */
 export const CATALOG_CRON = "8,23,38,53 * * * *";
+/** Review pass, hourly, on its own subrequest budget. */
+export const REVIEWS_CRON = "5 * * * *";
 
-export type ScheduledJob = "preorders" | "catalog" | "both";
+export type ScheduledJob = "preorders" | "catalog" | "reviews" | "both";
 
 export function scheduledJob(cron: string | undefined): ScheduledJob {
   const text = (cron ?? "").trim();
   if (text === PREORDER_CRON) return "preorders";
   if (text === CATALOG_CRON) return "catalog";
+  if (text === REVIEWS_CRON) return "reviews";
   return "both";
 }
 

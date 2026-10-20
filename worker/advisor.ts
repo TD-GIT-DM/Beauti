@@ -14,6 +14,7 @@ import {
 } from "../src/lib/advisor";
 import type { AdvisorMessage, AdvisorResponse } from "../src/types";
 import { mapProduct, withDiscount, type ProductRow } from "./db";
+import { readReviewSummaryMap } from "./reviews";
 
 const JSON_SCHEMA = {
   type: "json_schema",
@@ -87,9 +88,13 @@ export async function adviseFromCatalog(env: Env, question: string, messages: Ad
 
   const aiPick = await rankWithWorkersAi(env, question, shortlist, messages);
   const grounded = groundAdvisorPick(aiPick.pick, shortlist, query);
+  const summaries = await readReviewSummaryMap(env.DB);
   return {
     reply: grounded.reply,
-    products: clientAdvisorProducts(grounded.products),
+    products: clientAdvisorProducts(grounded.products).map((product) => ({
+      ...product,
+      reviews: summaries.get(product.id) ?? null,
+    })),
     searchHint: grounded.searchHint,
     grounded: true,
     model: aiPick.model,
